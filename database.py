@@ -6,11 +6,27 @@ Stores Work Orders, Clients, Machines, Inventory, and WhatsApp Messages.
 import sqlite3
 import json
 import os
+import shutil
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "cnc_crm.db")
+# Detect serverless environment (Vercel / AWS Lambda)
+IS_SERVERLESS = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+
+if IS_SERVERLESS:
+    # Serverless deployment roots are read-only; use /tmp for writable SQLite database
+    DB_PATH = "/tmp/cnc_crm.db"
+    ORIGINAL_DB = os.path.join(os.path.dirname(__file__), "cnc_crm.db")
+    if os.path.exists(ORIGINAL_DB) and not os.path.exists(DB_PATH):
+        try:
+            shutil.copy2(ORIGINAL_DB, DB_PATH)
+        except Exception as e:
+            print(f"Notice: Initial DB seed copy to /tmp skipped: {e}")
+else:
+    DB_PATH = os.path.join(os.path.dirname(__file__), "cnc_crm.db")
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
+    if IS_SERVERLESS and not os.path.exists(DB_PATH):
+        init_db()
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 

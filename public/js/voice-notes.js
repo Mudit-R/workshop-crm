@@ -247,5 +247,6 @@ class VortexVoiceNotes {
 // Export to window
 if (typeof window !== 'undefined') {
   window.VortexVoiceNotes = VortexVoiceNotes;
+  // Backward compatibility alias
   window.VortexIndicAiParser = VortexVoiceNotes;
 }

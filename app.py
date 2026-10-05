@@ -22,10 +22,12 @@ database.init_db()
 app = FastAPI(
     title="CNC Workshop CRM API",
     description="REST API for workshop management, job travelers, and WhatsApp notifications",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json"
 )
 
-# Enable CORS for local testing
+# Enable CORS for local and cloud testing
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,11 +36,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+# Support both 'static' (primary local) and 'public' (Vercel CDN deployment) directories
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static") if os.path.exists(os.path.join(os.path.dirname(__file__), "static")) else os.path.join(os.path.dirname(__file__), "public")
 
-# Mount Static Assets
-app.mount("/css", StaticFiles(directory=os.path.join(STATIC_DIR, "css")), name="css")
-app.mount("/js", StaticFiles(directory=os.path.join(STATIC_DIR, "js")), name="js")
+# Mount Static Assets for local development
+if os.path.exists(os.path.join(STATIC_DIR, "css")):
+    app.mount("/css", StaticFiles(directory=os.path.join(STATIC_DIR, "css")), name="css")
+if os.path.exists(os.path.join(STATIC_DIR, "js")):
+    app.mount("/js", StaticFiles(directory=os.path.join(STATIC_DIR, "js")), name="js")
 if os.path.exists(os.path.join(STATIC_DIR, "images")):
     app.mount("/images", StaticFiles(directory=os.path.join(STATIC_DIR, "images")), name="images")
 
@@ -377,13 +382,14 @@ async def receive_meta_webhook(request: Request):
     return {"status": "EVENT_RECEIVED"}
 
 # ============================================================================
-# INDIC AI NLP & SUPERVISOR EXTRACTION API
+# SHOP FLOOR VOICE NOTES & WORKER DICTATION API
 # ============================================================================
-class IndicParseRequest(BaseModel):
+class VoiceNoteLogRequest(BaseModel):
     text: str
 
+@app.post("/api/voice-notes/log")
 @app.post("/api/indic-ai/parse")
-def parse_indic_supervisor_text(req: IndicParseRequest):
+def log_floor_supervisor_note(req: VoiceNoteLogRequest):
     text = req.text.lower()
     event_type = "GENERAL_OPERATION_NOTE"
     status = "OK"
@@ -414,7 +420,7 @@ def parse_indic_supervisor_text(req: IndicParseRequest):
         "order_id": order_id,
         "machine_name": machine_name,
         "status": status,
-        "state_machine_updated": True
+        "erp_synchronized": True
     }
 
 # ============================================================================
