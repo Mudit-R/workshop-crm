@@ -69,6 +69,9 @@ class VortexApp {
     this.whatsAppManager = new window.VortexWhatsAppManager(this);
     this.quotingEngine = new window.VortexQuotingEngine(this);
     this.machineFleet = new window.VortexMachineFleet(this);
+    if (window.VortexWorkflowEngine) this.workflowEngine = new window.VortexWorkflowEngine(this);
+    if (window.VortexIndicAiParser) this.indicAiParser = new window.VortexIndicAiParser(this);
+    if (window.VortexOwnerBriefingManager) this.ownerBriefing = new window.VortexOwnerBriefingManager(this);
   }
 
   initAudio() {
@@ -219,6 +222,16 @@ class VortexApp {
       this.whatsAppManager.renderClientList();
       this.whatsAppManager.renderActiveConversation();
     }
+    if (viewName === 'workflows' && this.workflowEngine) {
+      this.workflowEngine.renderRulesList();
+      this.workflowEngine.renderAuditLogs();
+    }
+    if (viewName === 'owner-briefing' && this.ownerBriefing) {
+      this.ownerBriefing.renderOwnerBriefing();
+    }
+    if (viewName === 'tally' && this.ownerBriefing) {
+      this.ownerBriefing.renderTallyBridge();
+    }
   }
 
   renderCurrentView() {
@@ -226,6 +239,11 @@ class VortexApp {
     this.renderClientsDirectory();
     this.renderInventoryView();
     this.renderAnalyticsView();
+    if (this.workflowEngine) this.workflowEngine.renderRulesList();
+    if (this.ownerBriefing) {
+      this.ownerBriefing.renderOwnerBriefing();
+      this.ownerBriefing.renderTallyBridge();
+    }
   }
 
   updateDashboardCounters() {

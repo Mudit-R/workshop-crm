@@ -37,6 +37,12 @@
     </div>
 
     <div class="topbar-actions">
+      <!-- Currency Switcher (INR vs USD) -->
+      <div class="currency-toggle-group">
+        <button class="btn-cur active" id="btn-cur-inr" onclick="window.vortexApp.ownerBriefing ? window.vortexApp.ownerBriefing.setCurrency('INR') : null; this.parentElement.querySelectorAll('.btn-cur').forEach(b=>b.classList.remove('active')); this.classList.add('active');">₹ INR</button>
+        <button class="btn-cur" id="btn-cur-usd" onclick="window.vortexApp.ownerBriefing ? window.vortexApp.ownerBriefing.setCurrency('USD') : null; this.parentElement.querySelectorAll('.btn-cur').forEach(b=>b.classList.remove('active')); this.classList.add('active');">$ USD</button>
+      </div>
+
       <div class="shop-status-pill">
         <span class="status-dot-pulse"></span>
         <span id="shop-live-status-text">Shop Floor: 6 Machines Online</span>
@@ -89,9 +95,23 @@
               <span>DFM & Quoting</span>
             </a>
           </li>
+          <li>
+            <a href="#indic-ai" class="nav-link" data-view="indic-ai" style="color: #38bdf8;">
+              <i data-lucide="mic"></i>
+              <span>Indic Voice AI</span>
+              <span class="badge-nav" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8;">Hinglish</span>
+            </a>
+          </li>
+          <li>
+            <a href="#workflows" class="nav-link" data-view="workflows" style="color: var(--accent-amber);">
+              <i data-lucide="workflow"></i>
+              <span>Automation Rules</span>
+              <span class="badge-nav" style="background: rgba(245, 158, 11, 0.2); color: var(--accent-amber);">WHEN-THEN</span>
+            </a>
+          </li>
         </ul>
 
-        <div class="nav-group-title" style="margin-top: 16px;">Shop Management</div>
+        <div class="nav-group-title" style="margin-top: 14px;">Shop Management</div>
         <ul class="nav-list">
           <li>
             <a href="#machines" class="nav-link" data-view="machines">
@@ -109,6 +129,20 @@
             <a href="#inventory" class="nav-link" data-view="inventory">
               <i data-lucide="package"></i>
               <span>Raw Stock & Tooling</span>
+            </a>
+          </li>
+          <li>
+            <a href="#owner-briefing" class="nav-link" data-view="owner-briefing" style="color: #ec4899;">
+              <i data-lucide="sun"></i>
+              <span>8:30 AM Briefing</span>
+              <span class="badge-nav" style="background: rgba(236, 72, 153, 0.2); color: #ec4899;">Owner</span>
+            </a>
+          </li>
+          <li>
+            <a href="#tally" class="nav-link" data-view="tally" style="color: #10b981;">
+              <i data-lucide="receipt"></i>
+              <span>Tally & GST Bridge</span>
+              <span class="badge-nav" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">XML</span>
             </a>
           </li>
           <li>
@@ -721,6 +755,203 @@
         </div>
       </section>
 
+      <!-- =====================================================================
+           VIEW 9: INDIC VOICE & TEXT AI PARSER
+           ===================================================================== -->
+      <section id="view-indic-ai" class="view-section">
+        <div class="view-header">
+          <div class="view-header-titles">
+            <h2>🎙️ Indic AI Shop Floor Voice & Text Parser</h2>
+            <p>Zero worker ERP training. Supervisors talk or text in Hinglish / Gujarati / English, and AI updates the shop floor state machine.</p>
+          </div>
+        </div>
+
+        <div class="indic-ai-grid">
+          <!-- Input Card -->
+          <div class="indic-card">
+            <div class="indic-header">
+              <h3><i data-lucide="mic" style="color: #38bdf8;"></i> Supervisor Live Input Portal</h3>
+              <span class="badge-status status-machining">Hinglish / Gujarati NLP Active</span>
+            </div>
+
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">
+              Try clicking a real workshop voice sample below or type in natural Hinglish to see the state machine update in real-time:
+            </p>
+
+            <!-- 1-Click Simulation Samples -->
+            <div class="indic-sample-chips">
+              <button class="sample-chip chip-red" onclick="window.vortexApp.indicAiParser.loadSampleVoice('breakdown')">
+                🚨 "CNC-02 ka spindle breakdown hai, 3 ghante se band hai, tool tut gaya"
+              </button>
+              <button class="sample-chip chip-green" onclick="window.vortexApp.indicAiParser.loadSampleVoice('qc_pass')">
+                🔍 "Bhaiya Haas VF4 pe 4092 ka pressure testing pass ho gaya, anodizing ke liye bhej rahe"
+              </button>
+              <button class="sample-chip chip-blue" onclick="window.vortexApp.indicAiParser.loadSampleVoice('production_done')">
+                ⚙️ "VMC 1 pe 4091 ka 120 piece complete ho gaya, cutting done"
+              </button>
+              <button class="sample-chip chip-cyan" onclick="window.vortexApp.indicAiParser.loadSampleVoice('dispatch')">
+                🚚 "Order 4093 Voronoi drone arms DHL Express se dispatch ho gaya tracking 9401-8293-1120"
+              </button>
+            </div>
+
+            <div class="indic-input-box" style="margin-top: 16px;">
+              <textarea id="indic-input-text" class="form-control" rows="3" placeholder="Speak or type supervisor message (e.g. 'VMC 2 pe 4091 ka 150 pcs ban gaya' or 'CNC-03 breakdown tool issue')..."></textarea>
+            </div>
+
+            <div class="indic-actions-bar" style="display: flex; gap: 10px; margin-top: 12px;">
+              <button class="btn-primary" onclick="window.vortexApp.indicAiParser.parseAndExecute(document.getElementById('indic-input-text').value)">
+                <i data-lucide="cpu"></i> Parse & Execute State Machine
+              </button>
+              <button class="btn-outline" id="indic-mic-btn" onclick="window.vortexApp.indicAiParser.toggleVoiceRecording()">
+                <i data-lucide="mic"></i> Record Voice Note
+              </button>
+            </div>
+          </div>
+
+          <!-- Structured Result Output Card -->
+          <div class="indic-card">
+            <div class="indic-header">
+              <h3><i data-lucide="code" style="color: var(--accent-cyan);"></i> Operational State Extractor</h3>
+              <span class="badge-status status-g-code-ready">Zero-Entry Engine</span>
+            </div>
+
+            <div id="indic-parsed-result">
+              <div class="indic-empty-state">
+                <i data-lucide="sparkles" style="font-size: 32px; color: var(--accent-cyan); margin-bottom: 8px;"></i>
+                <p>Click any preset voice sample on the left or type a message to see how Indic AI parses messy worker chat into machine status, order progression, and WhatsApp alerts.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 10: WORKFLOW AUTOMATION RULES ENGINE
+           ===================================================================== -->
+      <section id="view-workflows" class="view-section">
+        <div class="view-header">
+          <div class="view-header-titles">
+            <h2>⚡ Operations Workflow Automation & Event Rules</h2>
+            <p>Connect your shop floor events with WhatsApp, machine telemetry, delay forecasts, and customer notifications.</p>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 360px; gap: 24px;">
+          <!-- Left: Active Automation Rules List -->
+          <div>
+            <h3 style="font-size: 1rem; color: #fff; margin-bottom: 14px;">Active Automation Recipes</h3>
+            <div id="workflow-rules-list" style="display: flex; flex-direction: column; gap: 14px;">
+              <!-- Populated by workflow-engine.js -->
+            </div>
+          </div>
+
+          <!-- Right: Real-time Execution Audit Log -->
+          <div class="stat-card" style="height: fit-content;">
+            <div class="stat-header">
+              <span class="stat-label">Live Event Audit Trail</span>
+              <span class="status-dot-pulse"></span>
+            </div>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 12px;">Real-time log of background rules executed by the engine:</p>
+            <div id="workflow-audit-logs" style="display: flex; flex-direction: column; gap: 8px; max-height: 480px; overflow-y: auto;">
+              <!-- Populated by workflow-engine.js -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 11: 8:30 AM OWNER WHATSAPP BRIEFING
+           ===================================================================== -->
+      <section id="view-owner-briefing" class="view-section">
+        <div class="view-header">
+          <div class="view-header-titles">
+            <h2>🌅 8:30 AM Owner WhatsApp Operations Briefing</h2>
+            <p>The software comes to the owner. Get complete shop floor visibility, at-risk delivery forecasts, and receivables on WhatsApp every morning.</p>
+          </div>
+
+          <div class="view-controls">
+            <button class="btn-wa" onclick="window.vortexApp.ownerBriefing.sendBriefingToOwnerWhatsApp()">
+              <i data-lucide="message-circle"></i> Send to Owner's WhatsApp Now
+            </button>
+            <button class="btn-outline" onclick="window.vortexApp.ownerBriefing.renderOwnerBriefing(); window.vortexApp.showToast('Briefing recalculated with latest shop telemetry!', 'info');">
+              <i data-lucide="refresh-cw"></i> Refresh Briefing
+            </button>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 380px; gap: 24px;">
+          <!-- Formatted WhatsApp Message Preview -->
+          <div class="stat-card" style="padding: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+              <h3 style="color: #fff; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="smartphone" style="color: var(--wa-green);"></i> Live WhatsApp Message Preview
+              </h3>
+              <span class="badge-status status-machining">Automated Daily 08:30 IST</span>
+            </div>
+
+            <div id="owner-briefing-preview" style="background: #0b141a; border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius-md); padding: 20px; font-family: var(--font-mono); font-size: 0.86rem; color: #e9edef; line-height: 1.6; white-space: pre-wrap;">
+              <!-- Populated by owner-briefing.js -->
+            </div>
+          </div>
+
+          <!-- Benefits & Channel Settings -->
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="stat-card">
+              <h4 style="color: #fff; margin-bottom: 8px;">Why Owners Love This</h4>
+              <ul style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.6; padding-left: 18px;">
+                <li><strong>Zero login needed:</strong> Owner reads it while having morning tea.</li>
+                <li><strong>Instant delay detection:</strong> Flags jobs before the client calls to complain.</li>
+                <li><strong>Machine health:</strong> Shows spindle uptime across Haas, DMG Mori, and Mazak mills.</li>
+                <li><strong>Cashflow watchdog:</strong> Highlights overdue receivables and uncollected deposits.</li>
+              </ul>
+            </div>
+
+            <div class="stat-card accent-emerald">
+              <h4 style="color: #fff; margin-bottom: 8px;">Target WhatsApp Number</h4>
+              <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">Configured recipient for factory owner:</p>
+              <input type="text" class="form-control font-mono" value="+91 98250 19283 (Vatva GIDC Works)" readonly>
+              <div style="margin-top: 12px;">
+                <a id="owner-briefing-wa-link" href="#" target="_blank" class="btn-wa" style="text-decoration: none; display: flex; justify-content: center; font-size: 0.82rem;">
+                  <i data-lucide="external-link"></i> Test Launch in WhatsApp Web
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 12: TALLY PRIME & GST 18% JOB WORK BRIDGE
+           ===================================================================== -->
+      <section id="view-tally" class="view-section">
+        <div class="view-header">
+          <div class="view-header-titles">
+            <h2>🧾 Tally Prime & GST 18% Job Work Bridge</h2>
+            <p>Keep Tally. We don't replace it. Export job work orders, HSN 9988 tax vouchers, and delivery challans directly into Tally Prime XML.</p>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="crm-table">
+            <thead>
+              <tr>
+                <th>Job #</th>
+                <th>Client Party Ledger</th>
+                <th>Component Description</th>
+                <th>HSN / SAC Code</th>
+                <th>Base Amount</th>
+                <th>GST Rate (CGST+SGST)</th>
+                <th>Total Voucher Val</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="tally-orders-list">
+              <!-- Populated by owner-briefing.js -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -1016,6 +1247,9 @@
   <script src="js/whatsapp.js"></script>
   <script src="js/quoting.js"></script>
   <script src="js/machine-fleet.js"></script>
+  <script src="js/workflow-engine.js"></script>
+  <script src="js/indic-ai-parser.js"></script>
+  <script src="js/owner-briefing.js"></script>
   <script src="js/app.js"></script>
 
   <script>

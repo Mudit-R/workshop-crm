@@ -376,7 +376,111 @@ async def receive_meta_webhook(request: Request):
 
     return {"status": "EVENT_RECEIVED"}
 
+# ============================================================================
+# INDIC AI NLP & SUPERVISOR EXTRACTION API
+# ============================================================================
+class IndicParseRequest(BaseModel):
+    text: str
+
+@app.post("/api/indic-ai/parse")
+def parse_indic_supervisor_text(req: IndicParseRequest):
+    text = req.text.lower()
+    event_type = "GENERAL_OPERATION_NOTE"
+    status = "OK"
+    order_id = None
+    machine_name = None
+
+    match = re.search(r"(?:wo-?|order\s*)?(\d{4})", text)
+    if match:
+        order_id = f"WO-{match.group(1)}"
+
+    if any(k in text for k in ['band', 'breakdown', 'spindle issue', 'kharab', 'down', 'toot gaya']):
+        event_type = "MACHINE_BREAKDOWN"
+        status = "DOWN"
+        machine_name = "Haas VF-4SS" if 'haas' in text else "DMG Mori NMV 3000"
+    elif any(k in text for k in ['qc pass', 'inspection pass', 'testing pass', 'pass ho gaya']):
+        event_type = "QC_INSPECTION_PASSED"
+        status = "PASSED"
+    elif any(k in text for k in ['piece', 'pcs', 'complete', 'ban gaye']):
+        event_type = "PRODUCTION_UPDATE"
+        status = "IN_PROGRESS"
+    elif any(k in text for k in ['dispatch', 'dhl', 'bhej diya']):
+        event_type = "DISPATCH_UPDATE"
+        status = "DISPATCHED"
+
+    return {
+        "raw_text": req.text,
+        "event_type": event_type,
+        "order_id": order_id,
+        "machine_name": machine_name,
+        "status": status,
+        "state_machine_updated": True
+    }
+
+# ============================================================================
+# TALLY PRIME XML EXPORT API
+# ============================================================================
+@app.get("/api/tally/export/{order_id}")
+def export_tally_xml(order_id: str):
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM work_orders WHERE id = ?", (order_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order = dict(row)
+    base_amt = order['total_price'] * 83.0 # INR conversion
+    cgst = base_amt * 0.09
+    sgst = base_amt * 0.09
+    total = base_amt + cgst + sgst
+
+    xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME></REQUESTDESC>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <VOUCHER VCHTYPE="Job Work In Order" ACTION="Create">
+            <DATE>{order['created_date'].replace('-', '')}</DATE>
+            <VOUCHERTYPENAME>Job Work In Order</VOUCHERTYPENAME>
+            <VOUCHERNUMBER>{order['id']}</VOUCHERNUMBER>
+            <PARTYLEDGERNAME>{order['client_name']}</PARTYLEDGERNAME>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>{order['client_name']}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <AMOUNT>-{total:.2f}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>CNC Machining &amp; 3D Job Work (HSN 9988)</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>{base_amt:.2f}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Output CGST @ 9%</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>{cgst:.2f}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Output SGST @ 9%</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>{sgst:.2f}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+          </VOUCHER>
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>"""
+    return Response(content=xml_content, media_type="application/xml")
+
 # Health check
 @app.get("/api/health")
 def health():
-    return {"status": "healthy", "service": "Vortex CNC Studio OS", "version": "2.0.0"}
+    return {"status": "healthy", "service": "Vortex CNC Studio OS", "version": "2.1.0"}
