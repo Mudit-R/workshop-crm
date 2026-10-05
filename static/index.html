@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VORTEX OS - Precision CNC & 3D Prototyping Workshop CRM</title>
+  <meta name="description" content="State-of-the-art CRM for CNC machine shops, 3D printing studios, and rapid prototyping services with WhatsApp Business integration and 3D CAD visualizer.">
+  <link rel="stylesheet" href="css/style.css">
+  <!-- Lucide Icons via CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Three.js & OrbitControls for 3D CAD visualization -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+</head>
+<body>
+
+  <!-- =========================================================================
+       TOPBAR / WORKSHOP HEADER
+       ========================================================================= -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="brand-icon">
+        <i data-lucide="layers"></i>
+      </div>
+      <div class="brand-text">
+        <h1>VORTEX <span>STUDIO OS</span> <span class="brand-badge">AS9100 / ISO 9001</span></h1>
+        <div class="brand-subtitle">Precision CNC Machining & Additive Manufacturing CRM</div>
+      </div>
+    </div>
+
+    <div class="topbar-center">
+      <div class="search-box">
+        <i data-lucide="search" class="search-icon"></i>
+        <input type="text" id="global-search-input" placeholder="Search work orders, drawings, clients, materials, or G-code...">
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="shop-status-pill">
+        <span class="status-dot-pulse"></span>
+        <span id="shop-live-status-text">Shop Floor: 6 Machines Online</span>
+      </div>
+
+      <button class="btn-primary" id="btn-create-work-order">
+        <i data-lucide="plus"></i> New Work Order
+      </button>
+
+      <button class="btn-wa" onclick="window.vortexApp.switchView('whatsapp')">
+        <i data-lucide="message-circle"></i> WhatsApp Hub
+      </button>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       APP LAYOUT (SIDEBAR + MAIN CONTENT)
+       ========================================================================= -->
+  <div class="app-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="nav-group-title">Operations</div>
+        <ul class="nav-list">
+          <li>
+            <a href="#work-orders" class="nav-link active" data-view="work-orders">
+              <i data-lucide="clipboard-list"></i>
+              <span>Work Orders</span>
+              <span class="badge-nav" id="nav-badge-orders">6</span>
+            </a>
+          </li>
+          <li>
+            <a href="#cad-viewer" class="nav-link" data-view="cad-viewer">
+              <i data-lucide="box"></i>
+              <span>3D CAD Inspector</span>
+              <span class="badge-nav">WebGL</span>
+            </a>
+          </li>
+          <li>
+            <a href="#whatsapp" class="nav-link nav-wa" data-view="whatsapp">
+              <i data-lucide="message-circle"></i>
+              <span>WhatsApp CRM</span>
+              <span class="badge-nav">Live Bot</span>
+            </a>
+          </li>
+          <li>
+            <a href="#quoting" class="nav-link" data-view="quoting">
+              <i data-lucide="calculator"></i>
+              <span>DFM & Quoting</span>
+            </a>
+          </li>
+        </ul>
+
+        <div class="nav-group-title" style="margin-top: 16px;">Shop Management</div>
+        <ul class="nav-list">
+          <li>
+            <a href="#machines" class="nav-link" data-view="machines">
+              <i data-lucide="cpu"></i>
+              <span>Machine Fleet</span>
+            </a>
+          </li>
+          <li>
+            <a href="#clients" class="nav-link" data-view="clients">
+              <i data-lucide="users"></i>
+              <span>Clients & Designers</span>
+            </a>
+          </li>
+          <li>
+            <a href="#inventory" class="nav-link" data-view="inventory">
+              <i data-lucide="package"></i>
+              <span>Raw Stock & Tooling</span>
+            </a>
+          </li>
+          <li>
+            <a href="#analytics" class="nav-link" data-view="analytics">
+              <i data-lucide="bar-chart-3"></i>
+              <span>Shop Financials</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <div class="sidebar-bottom">
+        <div class="sidebar-bottom-card">
+          <div class="sidebar-stat-row">
+            <span>Spindle Utilization:</span>
+            <span class="sidebar-stat-val" id="shop-utilization-val">82%</span>
+          </div>
+          <div class="sidebar-stat-row">
+            <span>Shop Status:</span>
+            <span class="sidebar-stat-val" style="color: var(--accent-emerald);">Optimal</span>
+          </div>
+          <div class="sidebar-stat-row" style="margin-bottom: 0;">
+            <span>Active WhatsApp Bot:</span>
+            <span class="sidebar-stat-val" style="color: var(--wa-green);">Connected</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN VIEWPORT -->
+    <main class="main-viewport">
+
+      <!-- =====================================================================
+           VIEW 1: WORK ORDERS
+           ===================================================================== -->
+      <section id="view-work-orders" class="view-section active">
+        <!-- Quick CNC Order Intake Banner -->
+        <div class="order-intake-banner">
+          <div class="intake-text">
+            <h3><i data-lucide="zap" style="color: var(--accent-amber);"></i> CNC Workshop Order Intake & Progress Tracker</h3>
+            <p>Take CNC milling, lathe turning, or 3D printing orders, assign machines, and send real-time WhatsApp updates.</p>
+          </div>
+          <div class="intake-actions">
+            <button class="btn-primary" onclick="window.vortexApp.openNewWorkOrderModal()">
+              <i data-lucide="plus-circle"></i> + Take New CNC Order
+            </button>
+            <button class="btn-wa" onclick="window.vortexApp.switchView('whatsapp')">
+              <i data-lucide="message-circle"></i> WhatsApp Business Hub
+            </button>
+            <button class="btn-outline" onclick="window.vortexApp.switchView('quoting')">
+              <i data-lucide="calculator"></i> DFM Cost Estimator
+            </button>
+          </div>
+        </div>
+
+        <!-- Top KPI Stats Banner -->
+        <div class="dashboard-stats-grid">
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-label">Active Work Orders</span>
+              <i data-lucide="activity" class="stat-icon text-accent"></i>
+            </div>
+            <div class="stat-value" id="stat-active-jobs">5</div>
+            <div class="stat-subtext">Across 5-axis CNC & 3D printers</div>
+          </div>
+
+          <div class="stat-card accent-emerald">
+            <div class="stat-header">
+              <span class="stat-label">Pipeline Value</span>
+              <i data-lucide="dollar-sign" class="stat-icon text-success"></i>
+            </div>
+            <div class="stat-value" id="stat-total-rev">$19,352</div>
+            <div class="stat-subtext">In-production billed value</div>
+          </div>
+
+          <div class="stat-card accent-amber">
+            <div class="stat-header">
+              <span class="stat-label">Spindles & Lasers Active</span>
+              <i data-lucide="zap" class="stat-icon text-warning"></i>
+            </div>
+            <div class="stat-value" id="stat-machines-running">3 / 6</div>
+            <div class="stat-subtext">Zero unplanned downtime today</div>
+          </div>
+
+          <div class="stat-card accent-purple">
+            <div class="stat-header">
+              <span class="stat-label">Outstanding Balances</span>
+              <i data-lucide="credit-card" class="stat-icon"></i>
+            </div>
+            <div class="stat-value" id="stat-balance-due">$5,062</div>
+            <div class="stat-subtext">WhatsApp invoice reminders ready</div>
+          </div>
+        </div>
+
+        <!-- Controls & Filters -->
+        <div class="view-header">
+          <div class="view-header-titles">
+            <h2>Work Orders & Shop Floor Queue</h2>
+            <p>Track part manufacturing lifecycle from CAD/DFM review to CMM metrology inspection and dispatch.</p>
+          </div>
+
+          <div class="view-controls">
+            <div class="filter-pills-group">
+              <button class="filter-pill active" data-filter="all">All Jobs</button>
+              <button class="filter-pill" data-filter="cnc">5-Axis / CNC</button>
+              <button class="filter-pill" data-filter="3d">3D Additive</button>
+              <button class="filter-pill" data-filter="machining">Machining Now</button>
+              <button class="filter-pill" data-filter="qc">QC Inspection</button>
+              <button class="filter-pill" data-filter="critical">Critical Rush</button>
+            </div>
+
+            <div class="view-toggle-group">
+              <button class="btn-toggle active" id="view-kanban-toggle" title="Kanban Board View">
+                <i data-lucide="columns-3"></i>
+              </button>
+              <button class="btn-toggle" id="view-table-toggle" title="Tabular Matrix View">
+                <i data-lucide="table"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Kanban Board View -->
+        <div id="wo-kanban-container" class="kanban-grid">
+          <!-- Dynamically populated by app.js -->
+        </div>
+
+        <!-- Tabular Matrix View (hidden by default) -->
+        <div id="wo-table-container" class="table-container" style="display: none;">
+          <table class="crm-table">
+            <thead>
+              <tr>
+                <th>Order #</th>
+                <th>Part Name / CAD</th>
+                <th>Client</th>
+                <th>Process</th>
+                <th>Material</th>
+                <th class="text-center">Qty</th>
+                <th>Stage & Progress</th>
+                <th>Due Date</th>
+                <th>Total ($)</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="wo-table-body">
+              <!-- Dynamically populated by app.js -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 2: 3D CAD INSPECTOR (THREE.JS)
+           ===================================================================== -->
+      <section id="view-cad-viewer" class="view-section">
+        <div class="view-header">
+          <div class="view-header-titles">
+            <h2>Interactive 3D CAD & Part Inspector</h2>
+            <p>Inspect part geometries, verify bounding box dimensions, simulate materials, and review tool clearances.</p>
+          </div>
+        </div>
+
+        <div class="cad-viewer-grid">
+          <div class="cad-viewport-card">
+            <!-- 3D Viewport HUD Overlay -->
+            <div class="cad-overlay-hud">
+              <div class="cad-hud-title" id="cad-part-name">Turbine Impeller 5-Axis Blisk</div>
+              <div class="cad-hud-sub" id="cad-order-ref">Work Order: WO-4091 (AeroTech Dynamics)</div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;" id="cad-material-ref">
+                Material: Aluminum 7075-T6 (CNC Milling 5-Axis)
+              </div>
+              <div style="font-size: 0.72rem; color: var(--accent-amber);" id="cad-tolerance-ref">
+                Tolerance Spec: ±0.015 mm
+              </div>
+            </div>
+
+            <!-- Floating 3D Controls -->
+            <div class="cad-floating-toolbar">
+              <button class="cad-tool-btn active" id="cad-btn-spin" onclick="window.vortexApp.cadViewer.toggleAutoRotate()">
+                <i data-lucide="rotate-cw"></i> Auto-Spin
+              </button>
+              <button class="cad-tool-btn" id="cad-btn-wire" onclick="window.vortexApp.cadViewer.toggleWireframe()">
+                <i data-lucide="grid"></i> Wireframe
+              </button>
+              <button class="cad-tool-btn active" id="cad-btn-bbox" onclick="window.vortexApp.cadViewer.toggleBoundingBox()">
+                <i data-lucide="maximize-2"></i> Bounding Box
+              </button>
+            </div>
+
+            <!-- Canvas Container -->
+            <div id="cad-viewport-container"></div>
+          </div>
+
+          <!-- Inspector Sidebar -->
+          <div class="cad-inspector-panel">
+            <div>
+              <div class="inspector-section-title">Part Geometry Models</div>
+              <div class="cad-presets-grid">
+                <button class="cad-preset-chip" onclick="window.vortexApp.cadViewer.loadPreset('turbine')">
+                  ⚙️ 5-Axis Impeller
+                </button>
+                <button class="cad-preset-chip" onclick="window.vortexApp.cadViewer.loadPreset('manifold')">
+                  🔲 Hydraulic Block
+                </button>
+                <button class="cad-preset-chip" onclick="window.vortexApp.cadViewer.loadPreset('bracket')">
+                  🕸️ Voronoi Arm
+                </button>
+                <button class="cad-preset-chip" onclick="window.vortexApp.cadViewer.loadPreset('gear')">
+                  ⚙️ Helical Housing
+                </button>
+                <button class="cad-preset-chip" onclick="window.vortexApp.cadViewer.loadPreset('enclosure')">
+                  📦 Sensor Casing
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <div class="inspector-section-title">Material & Finish Shaders</div>
+              <div class="material-swatches-grid">
+                <button class="mat-swatch-btn" onclick="window.vortexApp.cadViewer.setMaterialType('aluminum')">Al 6061</button>
+                <button class="mat-swatch-btn" onclick="window.vortexApp.cadViewer.setMaterialType('anodized_black')">Black Ano</button>
+                <button class="mat-swatch-btn" onclick="window.vortexApp.cadViewer.setMaterialType('titanium')">Titanium</button>
+                <button class="mat-swatch-btn" onclick="window.vortexApp.cadViewer.setMaterialType('brass')">Brass C360</button>
+                <button class="mat-swatch-btn" onclick="window.vortexApp.cadViewer.setMaterialType('sls_nylon')">PA12-CF</button>
+                <button class="mat-swatch-btn" onclick="window.vortexApp.cadViewer.setMaterialType('sla_resin')">Amber Resin</button>
+              </div>
+            </div>
+
+            <div>
+              <div class="inspector-section-title">Physical Metrology Specs</div>
+              <div class="cad-specs-box">
+                <div class="spec-line">
+                  <span>Bounding Box:</span>
+                  <span id="cad-dimensions-badge">180 × 180 × 65 mm</span>
+                </div>
+                <div class="spec-line">
+                  <span>Solid Volume:</span>
+                  <span id="cad-volume-badge">420 cm³</span>
+                </div>
+                <div class="spec-line">
+                  <span>Calculated Weight:</span>
+                  <span id="cad-weight-badge">1134 g (1.13 kg)</span>
+                </div>
+                <div class="spec-line">
+                  <span>Machinability Index:</span>
+                  <span style="color: var(--accent-emerald);">High (1.0)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Upload Custom STL/OBJ -->
+            <div>
+              <div class="inspector-section-title">Upload Custom 3D Model</div>
+              <label for="cad-file-upload" class="btn-outline" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; cursor: pointer;">
+                <i data-lucide="upload-cloud"></i> Load .STL / .OBJ File
+              </label>
+              <input type="file" id="cad-file-upload" accept=".stl,.obj" style="display: none;" onchange="handleUserCadUpload(event)">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 3: WHATSAPP INTEGRATION HUB
+           ===================================================================== -->
+      <section id="view-whatsapp" class="view-section">
+        <div class="view-header">
+          <div class="view-header-titles">
+            <h2>WhatsApp Business CRM & Automated Bot Hub</h2>
+            <p>Send instant order updates, quote approvals, live spindle telemetry, and invoices directly over WhatsApp.</p>
+          </div>
+
+          <div class="view-controls">
+            <button class="btn-outline" id="wa-simulate-inbound-btn" title="Simulates a client sending a status or quote inquiry via WhatsApp">
+              <i data-lucide="bot"></i> Simulate Client WhatsApp Inquiry
+            </button>
+            <button class="btn-outline" onclick="openMetaApiConfigModal()">
+              <i data-lucide="settings"></i> Meta Cloud API Settings
+            </button>
+          </div>
+        </div>
+
+        <div class="wa-suite-grid">
+          <!-- Col 1: Contacts & Active Threads -->
+          <div class="wa-card">
+            <div class="wa-contacts-header">
+              <h3><i data-lucide="message-square" style="color: var(--wa-green);"></i> Client WhatsApp Lines</h3>
+            </div>
+            <div class="wa-contacts-list" id="wa-client-threads">
+              <!-- Populated by whatsapp.js -->
+            </div>
+          </div>
+
+          <!-- Col 2: Live Chat Simulator Area -->
+          <div class="wa-card">
+            <div class="wa-chat-header">
+              <div class="wa-chat-header-info">
+                <h4 id="wa-header-client-name">AeroTech Dynamics Ltd (Dr. Marcus Vance)</h4>
+                <p id="wa-header-client-sub">WhatsApp: +15550192831 • Verified Client</p>
+              </div>
+              <div>
+                <a id="wa-header-direct-link" href="#" target="_blank" class="btn-sm btn-wa" style="text-decoration: none; font-size: 0.78rem;">
+                  <i data-lucide="external-link"></i> Open Real WhatsApp Web
+                </a>
+              </div>
+            </div>
+
+            <!-- Messages Stream -->
+            <div class="wa-chat-messages" id="wa-messages-container">
+              <!-- Populated by whatsapp.js -->
+            </div>
+
+            <!-- Typing Bar -->
+            <div class="wa-chat-input-bar">
+              <input type="text" id="wa-message-input" class="wa-input-field" placeholder="Type WhatsApp message or enter status update...">
+              <button id="wa-send-btn" class="wa-send-button" title="Send WhatsApp Message">
+                <i data-lucide="send"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Col 3: 1-Click Dispatch Templates & Quick Actions -->
+          <div class="wa-card">
+            <div class="wa-contacts-header">
+              <h3><i data-lucide="zap" style="color: var(--accent-amber);"></i> 1-Click Templates</h3>
+            </div>
+            <div class="wa-templates-panel">
+              <button class="tpl-item-btn" onclick="window.vortexApp.whatsAppManager.sendTemplateMessage('tpl-1', window.vortexApp.workOrders[0])">
+                <div class="tpl-title">🚀 Order Confirmed & DFM Approved</div>
+                <div class="tpl-preview">Notifies client that G-code is loaded and provides estimated completion date.</div>
+              </button>
+
+              <button class="tpl-item-btn" onclick="window.vortexApp.whatsAppManager.sendTemplateMessage('tpl-2', window.vortexApp.workOrders[0])">
+                <div class="tpl-title">⚙️ Spindle Running (Machining Started)</div>
+                <div class="tpl-preview">Live shop floor alert that their part is on the CNC bed and spindle is turning.</div>
+              </button>
+
+              <button class="tpl-item-btn" onclick="window.vortexApp.whatsAppManager.sendTemplateMessage('tpl-3', window.vortexApp.workOrders[0])">
+                <div class="tpl-title">🔍 QC Metrology Passed</div>
+                <div class="tpl-preview">Sends dimensional CMM inspection approval and surface roughness Ra confirmation.</div>
+              </button>
+
+              <button class="tpl-item-btn" onclick="window.vortexApp.whatsAppManager.sendTemplateMessage('tpl-4', window.vortexApp.workOrders[0])">
+                <div class="tpl-title">🚚 Dispatched / Courier Tracking</div>
+                <div class="tpl-preview">Sends packaging notification with tracking number and delivery details.</div>
+              </button>
+
+              <button class="tpl-item-btn" onclick="window.vortexApp.whatsAppManager.sendTemplateMessage('tpl-5', window.vortexApp.workOrders[0])">
+                <div class="tpl-title">💳 Digital Invoice & Payment Link</div>
+                <div class="tpl-preview">Sends billing statement and secure one-click payment URL over WhatsApp.</div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 4: INSTANT DFM & QUOTING ENGINE
+           ===================================================================== -->
+      <section id="view-quoting" class="view-section">
+        <div class="view-header">
+          <div class="view-header-titles">
+            <h2>Instant CNC & 3D Quoting Engine</h2>
+            <p>Real-time DFM costing based on material volume, spindle hourly rate, surface treatments, and batch scaling.</p>
+          </div>
+        </div>
+
+        <div class="quoting-grid">
+          <!-- Parameter Form -->
+          <div class="quote-form-card">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Manufacturing Process</label>
+                <select id="quote-process" class="form-control">
+                  <option value="cnc_5axis">CNC Milling (5-Axis High-Precision) - $150/hr</option>
+                  <option value="cnc_3axis">CNC Milling (3-Axis Production) - $85/hr</option>
+                  <option value="cnc_turnmill">CNC Mill-Turn Lathe - $110/hr</option>
+                  <option value="3d_sls">3D Printing (SLS PA12 / Carbon Nylon) - $65/hr</option>
+                  <option value="3d_metal">3D Printing (Metal DMLS Titanium/Steel) - $180/hr</option>
+                  <option value="3d_fdm">3D Printing (FDM High-Speed Composite) - $35/hr</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Material Grade</label>
+                <select id="quote-material" class="form-control">
+                  <!-- Populated by quoting.js -->
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Length (mm)</label>
+                <input type="number" id="quote-length" class="form-control" value="150" min="5" max="2000">
+              </div>
+              <div class="form-group">
+                <label>Width (mm)</label>
+                <input type="number" id="quote-width" class="form-control" value="120" min="5" max="2000">
+              </div>
+              <div class="form-group">
+                <label>Height (mm)</label>
+                <input type="number" id="quote-height" class="form-control" value="60" min="2" max="1000">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Batch Quantity (Volume Discount Tier)</label>
+                <input type="number" id="quote-quantity" class="form-control" value="25" min="1" max="10000">
+              </div>
+
+              <div class="form-group">
+                <label>Tolerance Standard</label>
+                <select id="quote-tolerance" class="form-control">
+                  <option value="commercial">Commercial Standard (±0.1 mm / ISO 2768-m)</option>
+                  <option value="precision" selected>Precision Machining (±0.02 mm / +18% fee)</option>
+                  <option value="aerospace">Aerospace / Critical (±0.008 mm / +35% fee)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Surface Treatment & Finishing</label>
+                <select id="quote-finish" class="form-control">
+                  <option value="as_machined">As Machined (Standard Tool Marks)</option>
+                  <option value="bead_blast">Glass Bead Blasted Matte</option>
+                  <option value="anodize_ii">Type II Anodized (Clear / Black / Blue)</option>
+                  <option value="hard_anodize_iii" selected>Type III Hard Anodize (50µm Aerospace)</option>
+                  <option value="electropolish">Electropolished & Passivated</option>
+                  <option value="vapor_smooth">Vapor Smoothed (3D Polymers)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Assign to Client</label>
+                <select id="quote-client" class="form-control">
+                  <!-- Populated by quoting.js -->
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Part / Project Name</label>
+                <input type="text" id="quote-part-name" class="form-control" value="Precision Aerospace Bracket Rev 3">
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Pricing Summary -->
+          <div class="quote-summary-card">
+            <div>
+              <div class="inspector-section-title">Instant DFM Quotation</div>
+              <div class="quote-hero-price">
+                <div class="price-main" id="quote-summary-total-price">$3,450.00</div>
+                <div class="price-unit" id="quote-summary-unit-price">$138.00 / unit</div>
+                <span class="brand-badge" id="quote-discount-badge" style="margin-top: 8px; display: inline-block;">15% Vol Discount</span>
+              </div>
+            </div>
+
+            <div id="quote-breakdown-details">
+              <!-- Populated by quoting.js -->
+            </div>
+
+            <div class="quote-row">
+              <span>Est. Machining Cycle Time:</span>
+              <span id="quote-summary-cycletime">35 mins / unit</span>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: auto;">
+              <button class="btn-primary" id="quote-convert-wo-btn" style="justify-content: center;">
+                <i data-lucide="check-circle-2"></i> Convert to Official Work Order
+              </button>
+              <button class="btn-wa" id="quote-send-wa-btn" style="justify-content: center;">
+                <i data-lucide="message-circle"></i> Send Quote to Client on WhatsApp
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 5: MACHINE FLEET MONITOR
+           ===================================================================== -->
+      <section id="view-machines" class="view-section">
+        <div class="view-header">
+          <div class="view-header-titles">
+            <h2>Shop Floor Machine Fleet & Telemetry</h2>
+            <p>Real-time spindle status, active tool offsets, feed rates, and machine capacity utilization.</p>
+          </div>
+
+          <div class="view-controls">
+            <span class="badge-status status-machining" id="shop-running-count">3 of 6 Active</span>
+            <span class="badge-status status-idle" id="shop-idle-count">2 Idle</span>
+          </div>
+        </div>
+
+        <div class="machines-grid" id="machines-grid-container">
+          <!-- Populated by machine-fleet.js -->
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 6: CLIENTS DIRECTORY
+           ===================================================================== -->
+      <section id="view-clients" class="view-section">
+        <div class="view-header">
+          <div class="view-header-titles">
+            <h2>Clients & 3D Engineering Accounts</h2>
+            <p>Manage customer relationships, credit limits, direct WhatsApp communications, and order history.</p>
+          </div>
+
+          <div class="view-controls">
+            <button class="btn-primary" id="btn-add-client">
+              <i data-lucide="user-plus"></i> Add New Client
+            </button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="crm-table">
+            <thead>
+              <tr>
+                <th>Company / Contact</th>
+                <th>Industry</th>
+                <th>WhatsApp & Email</th>
+                <th class="text-center">Total Orders</th>
+                <th>Lifetime Billed</th>
+                <th>Outstanding Balance</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="clients-table-body">
+              <!-- Populated by app.js -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 7: INVENTORY & MATERIALS
+           ===================================================================== -->
+      <section id="view-inventory" class="view-section">
+        <div class="view-header">
+          <div class="view-header-titles">
+            <h2>Raw Stock, Billets & Tooling Inventory</h2>
+            <p>Track raw metal bars, additive powders, resins, carbide endmills, and consumables with automatic low-stock alarms.</p>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="crm-table">
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Material / Tooling Name</th>
+                <th>Category</th>
+                <th>Current Stock</th>
+                <th>Reorder Threshold</th>
+                <th>Stock Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-table-body">
+              <!-- Populated by app.js -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 8: FINANCIAL ANALYTICS
+           ===================================================================== -->
+      <section id="view-analytics" class="view-section">
+        <div class="view-header">
+          <div class="view-header-titles">
+            <h2>Workshop Financial & Production Metrics</h2>
+            <p>Detailed breakdown of CNC milling vs 3D additive revenue, gross profit margins, and on-time delivery rates.</p>
+          </div>
+        </div>
+
+        <div class="dashboard-stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">On-Time Delivery Rate</div>
+            <div class="stat-value" style="color: var(--accent-emerald);">98.4%</div>
+            <div class="stat-subtext">Target: >95% (AS9100 KPI)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Average Gross Margin</div>
+            <div class="stat-value" style="color: var(--accent-cyan);">41.2%</div>
+            <div class="stat-subtext">Calculated after tooling & material</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">CMM Inspection Pass Rate</div>
+            <div class="stat-value" style="color: var(--accent-amber);">99.1%</div>
+            <div class="stat-subtext">First-article inspection standard</div>
+          </div>
+        </div>
+
+        <div class="stat-card" style="margin-top: 20px;">
+          <h4 style="margin-bottom: 14px;">Revenue Split: CNC Machining vs Additive Manufacturing</h4>
+          <div style="height: 24px; background: rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden; display: flex;">
+            <div id="analytics-bar-cnc" style="height: 100%; width: 65%; background: linear-gradient(90deg, #06b6d4, #0284c7);"></div>
+            <div id="analytics-bar-3d" style="height: 100%; width: 35%; background: linear-gradient(90deg, #8b5cf6, #ec4899);"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 0.85rem;">
+            <span id="analytics-label-cnc" style="color: #06b6d4; font-weight: 600;">CNC Machining: $32,450 (65%)</span>
+            <span id="analytics-label-3d" style="color: #ec4899; font-weight: 600;">3D Additive: $17,470 (35%)</span>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- =========================================================================
+       MODAL: WORK ORDER CREATE / EDIT
+       ========================================================================= -->
+  <div class="modal-backdrop" id="work-order-modal">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3 id="wo-modal-title">New CNC / 3D Work Order</h3>
+        <button class="modal-close-btn" id="wo-modal-close">&times;</button>
+      </div>
+      <form id="work-order-form">
+        <div class="modal-body">
+          <input type="hidden" id="wo-form-id">
+
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);">
+            <span style="font-size: 0.85rem; color: var(--text-muted);">Assigned Job #: <strong id="wo-form-order-number" class="font-mono text-accent">WO-4097</strong></span>
+            <span class="brand-badge">AS9100 Controlled</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Client Organization *</label>
+              <select id="wo-form-client-id" class="form-control" required>
+                <!-- Populated by app.js -->
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Part Name / Component Title *</label>
+              <input type="text" id="wo-form-part-name" class="form-control" placeholder="e.g. 5-Axis Turbine Impeller Blisk" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Manufacturing Process</label>
+              <select id="wo-form-process" class="form-control">
+                <option value="CNC Milling (5-Axis)">CNC Milling (5-Axis High-Precision)</option>
+                <option value="CNC Milling (3-Axis)">CNC Milling (3-Axis Vertical)</option>
+                <option value="CNC Turn-Mill (Multi-Tasking)">CNC Turn-Mill (Multi-Tasking)</option>
+                <option value="3D Printing (Metal DMLS)">3D Printing (Metal DMLS Titanium/Inconel)</option>
+                <option value="3D Printing (SLS PA12-CF)">3D Printing (SLS PA12-CF Carbon Nylon)</option>
+                <option value="3D Printing (SLA Tough Resin)">3D Printing (SLA High-Detail Tough Resin)</option>
+                <option value="CAD Design & Engineering">CAD 3D Modeling & Reverse Engineering</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Material Specification *</label>
+              <input type="text" id="wo-form-material" class="form-control" placeholder="e.g. Aluminum 7075-T6" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Finished Part Dimensions (mm)</label>
+              <input type="text" id="wo-form-dimensions" class="form-control" placeholder="e.g. 180 x 180 x 65 mm">
+            </div>
+
+            <div class="form-group">
+              <label>Tolerance Class</label>
+              <input type="text" id="wo-form-tolerance" class="form-control" placeholder="e.g. ±0.015 mm / DIN ISO 2768-m" value="±0.02 mm">
+            </div>
+
+            <div class="form-group">
+              <label>Surface Treatment & Coating</label>
+              <input type="text" id="wo-form-finish" class="form-control" placeholder="e.g. Type III Hard Anodize (Black)" value="As Machined">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Batch Quantity (Pcs) *</label>
+              <input type="number" id="wo-form-quantity" class="form-control" min="1" value="10" required>
+            </div>
+
+            <div class="form-group">
+              <label>Unit Price ($ USD) *</label>
+              <input type="number" step="0.01" id="wo-form-unit-price" class="form-control" value="180.00" required>
+            </div>
+
+            <div class="form-group">
+              <label>Total Job Value ($ USD)</label>
+              <input type="number" step="0.01" id="wo-form-total-price" class="form-control" value="1800.00">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Production Stage</label>
+              <select id="wo-form-status" class="form-control">
+                <option value="DFM Review">DFM & CAD Review</option>
+                <option value="G-Code Ready">G-Code / Toolpath Ready</option>
+                <option value="In Queue">In Queue</option>
+                <option value="Machining" selected>Machining / Printing In Progress</option>
+                <option value="QC Inspection">QC Metrology & CMM Inspection</option>
+                <option value="Dispatched">Dispatched / In Transit</option>
+                <option value="Delivered">Delivered & Invoiced</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Job Priority</label>
+              <select id="wo-form-priority" class="form-control">
+                <option value="Normal">Normal Production (5-7 Days)</option>
+                <option value="High" selected>High Priority (2-3 Days)</option>
+                <option value="Critical">Critical Rush (AOG 24 Hours)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Assigned Machine</label>
+              <select id="wo-form-machine-id" class="form-control">
+                <!-- Populated by app.js -->
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Progress Completion (%)</label>
+              <input type="range" id="wo-form-progress" min="0" max="100" value="50" oninput="document.getElementById('wo-progress-val').textContent = this.value + '%'">
+              <span id="wo-progress-val" style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-cyan);">50%</span>
+            </div>
+
+            <div class="form-group">
+              <label>Target Dispatch Date</label>
+              <input type="date" id="wo-form-due-date" class="form-control" value="2026-10-15">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Shop Floor / Metrology Inspection Notes</label>
+            <textarea id="wo-form-notes" class="form-control" rows="2" placeholder="Include critical datum features, thread classes, Ra roughness, or cleanroom packaging requirements..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-outline" onclick="window.vortexApp.closeWorkOrderModal()">Cancel</button>
+          <button type="submit" class="btn-primary">
+            <i data-lucide="save"></i> Save Work Order
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL: JOB TRAVELER & ROUTER PRINT
+       ========================================================================= -->
+  <div class="modal-backdrop" id="job-traveler-modal">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3>Shop Job Traveler & Router (AS9100 / ISO 9001)</h3>
+        <button class="modal-close-btn" onclick="window.vortexApp.closeJobTravelerModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="job-traveler-print-area">
+        <!-- Populated by app.js -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn-outline" onclick="window.vortexApp.closeJobTravelerModal()">Close</button>
+        <button class="btn-primary" onclick="window.print()">
+          <i data-lucide="printer"></i> Print Job Traveler
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL: REAL WHATSAPP PROMPT & LAUNCHER
+       ========================================================================= -->
+  <div class="modal-backdrop" id="real-wa-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 style="color: var(--wa-green); display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="message-circle"></i> Launch Real WhatsApp Chat
+        </h3>
+        <button class="modal-close-btn" onclick="window.vortexApp.whatsAppManager.closeRealWhatsAppModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 14px;">
+          Your message has been formatted for the client. You can send it directly through your real WhatsApp Web or mobile app with 1 click:
+        </p>
+
+        <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; margin-bottom: 18px; font-family: var(--font-mono); font-size: 0.82rem; white-space: pre-wrap;" id="real-wa-preview-text">
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <a id="real-wa-btn-link" href="#" target="_blank" class="btn-wa" style="flex: 1; text-align: center; justify-content: center; text-decoration: none;">
+            <i data-lucide="external-link"></i> Open WhatsApp Web Now
+          </a>
+          <button class="btn-outline" onclick="navigator.clipboard.writeText(document.getElementById('real-wa-preview-text').textContent); window.vortexApp.showToast('Copied to clipboard!', 'success');">
+            <i data-lucide="copy"></i> Copy Text
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL: META CLOUD API SETTINGS
+       ========================================================================= -->
+  <div class="modal-backdrop" id="meta-api-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Meta WhatsApp Cloud API Configuration</h3>
+        <button class="modal-close-btn" onclick="closeMetaApiConfigModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px;">
+          Connect your official Meta WhatsApp Business Cloud API or Twilio credentials to enable automatic server-side message dispatching and webhook callbacks.
+        </p>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>Phone Number ID (Meta Developer Portal)</label>
+          <input type="text" class="form-control" value="109842109841203">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>WhatsApp Business Account ID (WABA)</label>
+          <input type="text" class="form-control" value="891230491823901">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>Permanent Access Token</label>
+          <input type="password" class="form-control" value="EAAG_MOCK_PERMANENT_SYSTEM_USER_TOKEN">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>Webhook Verify Token</label>
+          <input type="text" class="form-control" value="vortex_cnc_secure_2026">
+        </div>
+
+        <div class="form-group">
+          <label>Webhook Callback URL</label>
+          <input type="text" class="form-control font-mono" value="http://localhost:8000/api/whatsapp/webhook" readonly>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-outline" onclick="closeMetaApiConfigModal()">Cancel</button>
+        <button class="btn-primary" onclick="closeMetaApiConfigModal(); window.vortexApp.showToast('Meta Cloud API configuration saved!', 'success');">
+          Save Configuration
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL: QUICK WHATSAPP DISPATCH MODAL
+       ========================================================================= -->
+  <div class="modal-backdrop" id="wa-quick-dispatch-modal">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3 style="color: var(--wa-green); display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="message-circle"></i> Send WhatsApp Business Update
+        </h3>
+        <button class="modal-close-btn" onclick="window.vortexApp.closeWhatsAppQuickModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: rgba(37, 211, 102, 0.08); border: 1px solid rgba(37, 211, 102, 0.25); border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-size: 0.78rem; color: var(--text-muted);">WORK ORDER:</div>
+            <strong id="wa-quick-order-title" style="color: #fff; font-size: 1.05rem;">WO-4091 - Turbine Impeller</strong>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.78rem; color: var(--text-muted);">CLIENT WHATSAPP:</div>
+            <strong id="wa-quick-client-name" style="color: var(--wa-green);">AeroTech Dynamics (+15550192831)</strong>
+          </div>
+        </div>
+
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">
+          Select a verified WhatsApp template below. You can send it directly inside the CRM bot simulator or open your real WhatsApp Web app with 1 click:
+        </p>
+
+        <div id="wa-quick-template-options" style="display: flex; flex-direction: column; gap: 12px; max-height: 440px; overflow-y: auto;">
+          <!-- Populated dynamically by app.js -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-outline" onclick="window.vortexApp.closeWhatsAppQuickModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container"></div>
+
+  <!-- APPLICATION SCRIPTS -->
+  <script src="js/data.js"></script>
+  <script src="js/cad-viewer.js"></script>
+  <script src="js/whatsapp.js"></script>
+  <script src="js/quoting.js"></script>
+  <script src="js/machine-fleet.js"></script>
+  <script src="js/app.js"></script>
+
+  <script>
+    // Initialize Lucide Icons after DOM load
+    window.addEventListener('DOMContentLoaded', () => {
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
+    });
+
+    // Helper for Meta API modal
+    function openMetaApiConfigModal() {
+      const el = document.getElementById('meta-api-modal');
+      if (el) el.classList.add('open');
+    }
+    function closeMetaApiConfigModal() {
+      const el = document.getElementById('meta-api-modal');
+      if (el) el.classList.remove('open');
+    }
+
+    // Helper for loading custom user STL/OBJ
+    function handleUserCadUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        if (window.vortexApp && window.vortexApp.cadViewer) {
+          window.vortexApp.cadViewer.loadCustomSTL(e.target.result);
+          window.vortexApp.showToast(`Loaded ${file.name} successfully!`, 'success');
+          document.getElementById('cad-part-name').textContent = file.name;
+          document.getElementById('cad-order-ref').textContent = "Custom Imported 3D Geometry";
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  </script>
+</body>
+</html>
