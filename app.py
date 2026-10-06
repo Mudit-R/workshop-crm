@@ -99,6 +99,22 @@ class WhatsAppMessageIn(BaseModel):
 class MachineStatusUpdate(BaseModel):
     status: str # 'Running', 'Idle', 'Setup', 'Maintenance'
 
+class WorkOrderStatusUpdate(BaseModel):
+    status: str
+    progress: Optional[int] = None
+
+class InventoryItemCreate(BaseModel):
+    id: Optional[str] = None
+    name: str
+    category: str
+    stock: float = 0.0
+    unit: str = "Pcs"
+    min_threshold: float = 5.0
+    status: Optional[str] = "In Stock"
+
+class InventoryRestock(BaseModel):
+    quantity: float
+
 # Root Endpoint serves CRM Single Page App
 @app.get("/")
 def serve_index():
@@ -196,6 +212,18 @@ def delete_work_order(order_id: str):
     conn.close()
     return {"status": "deleted", "id": order_id}
 
+@app.put("/api/work-orders/{order_id}/status")
+def update_work_order_status(order_id: str, payload: WorkOrderStatusUpdate):
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    if payload.progress is not None:
+        cursor.execute("UPDATE work_orders SET status = ?, progress = ? WHERE id = ?", (payload.status, payload.progress, order_id))
+    else:
+        cursor.execute("UPDATE work_orders SET status = ? WHERE id = ?", (payload.status, order_id))
+    conn.commit()
+    conn.close()
+    return {"status": "updated", "id": order_id, "new_status": payload.status}
+
 # ============================================================================
 # CLIENTS API
 # ============================================================================
@@ -226,6 +254,23 @@ def create_client(client: ClientCreate):
     conn.commit()
     conn.close()
     return {"status": "success", "id": client_id}
+
+@app.put("/api/clients/{client_id}")
+def update_client(client_id: str, client: ClientCreate):
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    UPDATE clients SET
+        name = ?, company = ?, email = ?, phone = ?,
+        whatsapp = ?, industry = ?, tax_id = ?, notes = ?
+    WHERE id = ?
+    """, (
+        client.name, client.company, client.email, client.phone,
+        client.whatsapp, client.industry, client.tax_id, client.notes, client_id
+    ))
+    conn.commit()
+    conn.close()
+    return {"status": "updated", "id": client_id}
 
 # ============================================================================
 # MACHINES API & TELEMETRY
@@ -486,7 +531,99 @@ def export_tally_xml(order_id: str):
 </ENVELOPE>"""
     return Response(content=xml_content, media_type="application/xml")
 
+# ============================================================================
+# INVENTORY & TOOLING API
+# ============================================================================
+@app.get("/api/inventory")
+def get_inventory():
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM inventory ORDER BY id ASC")
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
+
+@app.post("/api/inventory")
+def create_inventory_item(item: InventoryItemCreate):
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    item_id = item.id
+    if not item_id:
+        cursor.execute("SELECT COUNT(*) FROM inventory")
+        c = cursor.fetchone()[0]
+        item_id = f"INV-{c + 1:02d}"
+
+    status = "Low Stock" if item.stock <= item.min_threshold else "In Stock"
+    cursor.execute("""
+    INSERT INTO inventory (id, name, category, stock, unit, min_threshold, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (item_id, item.name, item.category, item.stock, item.unit, item.min_threshold, status))
+    conn.commit()
+    conn.close()
+    return {"status": "created", "id": item_id}
+
+@app.put("/api/inventory/{item_id}")
+def update_inventory_item(item_id: str, item: InventoryItemCreate):
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    status = "Low Stock" if item.stock <= item.min_threshold else "In Stock"
+    cursor.execute("""
+    UPDATE inventory SET name = ?, category = ?, stock = ?, unit = ?, min_threshold = ?, status = ?
+    WHERE id = ?
+    """, (item.name, item.category, item.stock, item.unit, item.min_threshold, status, item_id))
+    conn.commit()
+    conn.close()
+    return {"status": "updated", "id": item_id}
+
+@app.put("/api/inventory/{item_id}/restock")
+def restock_inventory_item(item_id: str, payload: InventoryRestock):
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT stock, min_threshold FROM inventory WHERE id = ?", (item_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+
+    new_stock = row["stock"] + payload.quantity
+    status = "Low Stock" if new_stock <= row["min_threshold"] else "In Stock"
+    cursor.execute("UPDATE inventory SET stock = ?, status = ? WHERE id = ?", (new_stock, status, item_id))
+    conn.commit()
+    conn.close()
+    return {"status": "restocked", "id": item_id, "new_stock": new_stock}
+
+@app.delete("/api/inventory/{item_id}")
+def delete_inventory_item(item_id: str):
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM inventory WHERE id = ?", (item_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "deleted", "id": item_id}
+
 # Health check
 @app.get("/api/health")
 def health():
-    return {"status": "healthy", "service": "Vortex CNC Studio OS", "version": "2.1.0"}
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM work_orders")
+    order_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM clients")
+    client_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM machines")
+    machine_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM inventory")
+    inventory_count = cursor.fetchone()[0]
+    conn.close()
+    return {
+        "status": "healthy",
+        "service": "Vortex CNC Studio OS",
+        "version": "2.2.0",
+        "database": "connected",
+        "stats": {
+            "work_orders": order_count,
+            "clients": client_count,
+            "machines": machine_count,
+            "inventory": inventory_count
+        }
+    }

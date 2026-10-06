@@ -279,15 +279,25 @@
       <div class="o-form-sheet-container" id="odoo-order-detail-sheet" style="display: none; margin-top: 18px;">
         <!-- Statusbar Header with Chevrons -->
         <div class="o-statusbar">
+          <!-- Action Buttons (data-order-id set dynamically by JS) -->
           <div class="o-statusbar-buttons">
-            <button class="btn-odoo-wa" onclick="window.vortexApp.openWhatsAppQuickModal('WO-4091')">
-              <i data-lucide="message-circle"></i> Send WhatsApp Message
+            <button id="sheet-btn-whatsapp" class="btn-odoo-wa" data-order-id="">
+              <i data-lucide="message-circle"></i> Send WhatsApp
             </button>
-            <button class="btn-odoo-secondary" onclick="window.vortexApp.openJobTravelerModal('WO-4091')">
-              <i data-lucide="printer"></i> Print Job Router
+            <button id="sheet-btn-traveler" class="btn-odoo-secondary" data-order-id="">
+              <i data-lucide="printer"></i> Print Traveler
             </button>
-            <button class="btn-odoo-secondary" onclick="window.vortexApp.advanceOrderStage('WO-4091')">
+            <button id="sheet-btn-tally" class="btn-odoo-secondary" data-order-id="" title="Export Tally Prime GST 18% XML">
+              <i data-lucide="download"></i> Tally XML
+            </button>
+            <button id="sheet-btn-advance" class="btn-odoo-secondary" data-order-id="">
               <i data-lucide="arrow-right-circle"></i> Advance Stage
+            </button>
+            <button id="sheet-btn-edit" class="btn-odoo-secondary" data-order-id="">
+              <i data-lucide="edit"></i> Edit
+            </button>
+            <button id="sheet-btn-delete" class="btn-odoo-secondary" style="color: var(--status-error-text);" data-order-id="">
+              <i data-lucide="trash-2"></i> Delete
             </button>
             <button class="btn-odoo-secondary" onclick="window.vortexApp.closeOrderDetailSheet()">
               ← Back to Kanban
@@ -314,7 +324,7 @@
               <div class="stat-desc">Al 7075-T6 Bar</div>
             </div>
           </button>
-          <button class="o-stat-btn" onclick="window.vortexApp.switchView('whatsapp')">
+          <button id="sheet-smart-btn-wa" class="o-stat-btn" onclick="window.vortexApp.switchView('whatsapp')">
             <i data-lucide="message-circle" style="color: var(--wa-green);"></i>
             <div>
               <div class="stat-num">4 Messages</div>
@@ -328,7 +338,7 @@
               <div class="stat-desc">5-Axis Spindle</div>
             </div>
           </button>
-          <button class="o-stat-btn" onclick="window.vortexApp.switchView('tally')">
+          <button id="sheet-smart-btn-tally" class="o-stat-btn" onclick="window.vortexApp.switchView('tally')">
             <i data-lucide="receipt" style="color: var(--status-success-text);"></i>
             <div>
               <div class="stat-num">₹2,83,860</div>
@@ -349,23 +359,23 @@
               <div class="o-field-row">
                 <span class="o-field-label">Customer</span>
                 <span class="o-field-val">
-                  <strong>AeroTech Dynamics Ltd</strong> (Dr. Marcus Vance) 
-                  <a href="javascript:void(0)" onclick="window.vortexApp.openWhatsAppQuickModal('WO-4091')" style="color: var(--wa-green); text-decoration: none; margin-left: 6px;">
-                    <i data-lucide="message-circle" style="width: 14px; height: 14px; vertical-align: middle;"></i> +15550192831
+                  <strong id="sheet-customer-name">AeroTech Dynamics Ltd (Dr. Marcus Vance)</strong>
+                  <a id="sheet-wa-phone-link" href="javascript:void(0)" onclick="window.vortexApp.openWhatsAppQuickModal('WO-4091')" style="color: var(--wa-green); text-decoration: none; margin-left: 6px;">
+                    <i data-lucide="message-circle" style="width: 14px; height: 14px; vertical-align: middle;"></i>
                   </a>
                 </span>
               </div>
               <div class="o-field-row">
                 <span class="o-field-label">Manufacturing Process</span>
-                <span class="o-field-val">CNC Milling (5-Axis Simultaneous)</span>
+                <span class="o-field-val" id="sheet-process">CNC Milling (5-Axis Simultaneous)</span>
               </div>
               <div class="o-field-row">
                 <span class="o-field-label">Material</span>
-                <span class="o-field-val">Aluminum 7075-T6 (Aerospace Grade)</span>
+                <span class="o-field-val" id="sheet-material">Aluminum 7075-T6 (Aerospace Grade)</span>
               </div>
               <div class="o-field-row">
                 <span class="o-field-label">Dimensions</span>
-                <span class="o-field-val">180 x 180 x 65 mm (Envelope)</span>
+                <span class="o-field-val" id="sheet-dimensions">180 x 180 x 65 mm (Envelope)</span>
               </div>
             </div>
 
@@ -783,6 +793,11 @@
           <h2>Raw Material & Tooling Inventory</h2>
           <p>Track aluminum bar stock, titanium ingots, carbon nylon powders, and carbide end mills.</p>
         </div>
+        <div class="view-controls">
+          <button class="btn-odoo-primary" id="btn-add-inventory" onclick="window.vortexApp.openAddInventoryModal()">
+            <i data-lucide="plus"></i> Add Stock Item
+          </button>
+        </div>
       </div>
 
       <div class="table-view-container">
@@ -1124,6 +1139,18 @@
             </div>
           </div>
 
+          <div class="form-row">
+            <div class="form-group">
+              <label>Target Due Date</label>
+              <input type="date" id="wo-form-due-date" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>Current Progress: <strong id="wo-form-progress-label">0%</strong></label>
+              <input type="range" id="wo-form-progress" class="form-control" min="0" max="100" step="5" value="0"
+                oninput="document.getElementById('wo-form-progress-label').textContent = this.value + '%'">
+            </div>
+          </div>
+
           <div class="form-group">
             <label>Metrology / Shop Floor Notes</label>
             <textarea id="wo-form-notes" class="form-control" rows="2" placeholder="Include critical dimensions, CMM requirements, or thread tolerances..."></textarea>
@@ -1140,9 +1167,162 @@
     </div>
   </div>
 
-  <!-- =========================================================================
-       MODAL: JOB TRAVELER & ROUTER PRINT
-       ========================================================================= -->
+  <!-- MODAL: ADD / EDIT CUSTOMER -->
+  <div class="modal-backdrop" id="add-client-modal">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3 id="client-modal-title">Add New Customer</h3>
+        <button class="modal-close-btn" id="client-modal-close">&times;</button>
+      </div>
+      <form id="client-form">
+        <div class="modal-body">
+          <input type="hidden" id="client-form-id">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Company / Organization Name *</label>
+              <input type="text" id="client-form-company" class="form-control" placeholder="e.g. AeroTech Dynamics Ltd" required>
+            </div>
+            <div class="form-group">
+              <label>Primary Contact Person *</label>
+              <input type="text" id="client-form-name" class="form-control" placeholder="e.g. Dr. Marcus Vance" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Email Address</label>
+              <input type="email" id="client-form-email" class="form-control" placeholder="contact@company.com">
+            </div>
+            <div class="form-group">
+              <label>Phone Number</label>
+              <input type="tel" id="client-form-phone" class="form-control" placeholder="+1 555 000 0000">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>WhatsApp Number * (with country code)</label>
+              <input type="tel" id="client-form-whatsapp" class="form-control" placeholder="+15551234567" required>
+            </div>
+            <div class="form-group">
+              <label>Industry Sector</label>
+              <select id="client-form-industry" class="form-control">
+                <option value="Aerospace &amp; Defense">Aerospace &amp; Defense</option>
+                <option value="Industrial Automation">Industrial Automation</option>
+                <option value="Robotics &amp; Drones">Robotics &amp; Drones</option>
+                <option value="Medical Devices">Medical Devices</option>
+                <option value="Motion Control">Motion Control</option>
+                <option value="Scientific Sensors">Scientific Sensors</option>
+                <option value="Automotive">Automotive</option>
+                <option value="General Engineering">General Engineering</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>GST / Tax ID</label>
+              <input type="text" id="client-form-taxid" class="form-control" placeholder="GSTIN or Tax Registration">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Internal Notes</label>
+            <textarea id="client-form-notes" class="form-control" rows="2" placeholder="Special instructions, payment terms, industry certifications..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-odoo-secondary" onclick="window.vortexApp.closeAddClientModal()">Cancel</button>
+          <button type="submit" class="btn-odoo-primary">
+            <i data-lucide="user-plus"></i> Save Customer
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD INVENTORY / STOCK ITEM -->
+  <div class="modal-backdrop" id="add-inventory-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="inv-modal-title">Add Raw Stock / Tooling SKU</h3>
+        <button class="modal-close-btn" onclick="window.vortexApp.closeAddInventoryModal()">&times;</button>
+      </div>
+      <form id="inventory-form" onsubmit="window.vortexApp.saveInventoryFromForm(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Item Name & Specification *</label>
+            <input type="text" id="inv-form-name" class="form-control" placeholder="e.g. Aluminum 6061-T6 Round Billet (120mm dia)" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Category *</label>
+              <select id="inv-form-category" class="form-control" required>
+                <option value="Raw Stock">Raw Stock (Billet/Plate/Bar)</option>
+                <option value="Plastics">Plastics & Polymers</option>
+                <option value="3D Powder">3D Polymer Powder</option>
+                <option value="Metal Powder">Metal 3D Powder (DMLS)</option>
+                <option value="Tooling">CNC Tooling & Endmills</option>
+                <option value="Consumables">Consumables & Coolants</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Unit of Measure *</label>
+              <input type="text" id="inv-form-unit" class="form-control" placeholder="Bars, Plates, kg, Pcs, Liters" value="Bars" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Initial Stock Quantity *</label>
+              <input type="number" step="0.1" id="inv-form-stock" class="form-control" min="0" value="10" required>
+            </div>
+            <div class="form-group">
+              <label>Minimum Reorder Threshold *</label>
+              <input type="number" step="0.1" id="inv-form-min-threshold" class="form-control" min="0" value="3" required>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-odoo-secondary" onclick="window.vortexApp.closeAddInventoryModal()">Cancel</button>
+          <button type="submit" class="btn-odoo-primary">
+            <i data-lucide="package-plus"></i> Save SKU to Stock
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: RESTOCK ITEM -->
+  <div class="modal-backdrop" id="restock-item-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Receive Stock Shipment</h3>
+        <button class="modal-close-btn" onclick="window.vortexApp.closeRestockModal()">&times;</button>
+      </div>
+      <form id="restock-form" onsubmit="window.vortexApp.submitRestock(event)">
+        <input type="hidden" id="restock-item-id">
+        <div class="modal-body">
+          <div style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 14px;">
+            <div style="font-size: 11px; color: var(--text-muted);">SKU RECEIVING:</div>
+            <strong id="restock-item-name" style="color: var(--text-main); font-size: 13px;">Item Name</strong>
+            <div style="font-size: 12px; margin-top: 4px; color: var(--text-secondary);">
+              Current Stock: <span id="restock-current-stock" class="font-bold">0</span> <span id="restock-unit-label">Units</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Quantity to Receive into Workshop *</label>
+            <input type="number" step="0.1" id="restock-add-qty" class="form-control font-bold" min="0.1" value="10" required autofocus>
+          </div>
+          <div class="form-group">
+            <label>Heat Lot / Vendor PO # (Optional)</label>
+            <input type="text" id="restock-notes" class="form-control" placeholder="e.g. PO-8842 / Lot #AER-9912">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-odoo-secondary" onclick="window.vortexApp.closeRestockModal()">Cancel</button>
+          <button type="submit" class="btn-odoo-primary">
+            <i data-lucide="check"></i> Confirm Receipt & Update Ledger
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
   <div class="modal-backdrop" id="job-traveler-modal">
     <div class="modal-dialog modal-lg">
       <div class="modal-header">
@@ -1238,6 +1418,7 @@
   <div id="toast-container"></div>
 
   <!-- APPLICATION SCRIPTS -->
+  <script src="js/api.js"></script>
   <script src="js/data.js"></script>
   <script src="js/cad-viewer.js"></script>
   <script src="js/whatsapp.js"></script>

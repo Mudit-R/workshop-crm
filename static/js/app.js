@@ -9,9 +9,10 @@ class VortexApp {
     this.viewMode = 'kanban'; // 'kanban' or 'table'
     this.activeFilter = 'all';
     this.searchQuery = '';
+    this.backendAvailable = false;
 
-    // Load persisted state or fallback
-    this.loadState();
+    // Load from local fallback data immediately (fast render)
+    this.loadLocalFallback();
 
     // Sound FX generator (Web Audio API)
     this.initAudio();
@@ -24,44 +25,82 @@ class VortexApp {
     this.setupWorkOrderHandlers();
     this.setupClientHandlers();
 
-    // Render initial view
+    // Render initial view with local data
     this.renderCurrentView();
     this.updateDashboardCounters();
+
+    // Async: try to sync with backend (non-blocking)
+    this.syncWithBackend();
 
     console.log("Vortex CNC CRM initialized successfully.");
   }
 
-  loadState() {
-    try {
-      const savedOrders = localStorage.getItem('vortex_work_orders');
-      const savedClients = localStorage.getItem('vortex_clients');
-      const savedMachines = localStorage.getItem('vortex_machines');
+  loadLocalFallback() {
+    // Always load from data.js initial data as baseline
+    const D = window.VORTEX_INITIAL_DATA;
+    this.workOrders = D.workOrders;
+    this.clients = D.clients;
+    this.machines = D.machines;
+    this.materials = D.materialsDatabase;
+    this.inventory = D.inventory;
+    this.shopInfo = D.shopInfo;
+  }
 
-      this.workOrders = savedOrders ? JSON.parse(savedOrders) : window.VORTEX_INITIAL_DATA.workOrders;
-      this.clients = savedClients ? JSON.parse(savedClients) : window.VORTEX_INITIAL_DATA.clients;
-      this.machines = savedMachines ? JSON.parse(savedMachines) : window.VORTEX_INITIAL_DATA.machines;
-      this.materials = window.VORTEX_INITIAL_DATA.materialsDatabase;
-      this.inventory = window.VORTEX_INITIAL_DATA.inventory;
-      this.shopInfo = window.VORTEX_INITIAL_DATA.shopInfo;
+  async syncWithBackend() {
+    const api = window.VortexAPI;
+    if (!api) return;
+
+    const isLive = await api.checkHealth();
+    this.backendAvailable = isLive;
+
+    if (!isLive) {
+      console.info('[CRM] Running in offline/demo mode — backend not reachable.');
+      return;
+    }
+
+    console.info('[CRM] Backend connected — syncing data...');
+
+    try {
+      const [orders, clients, machines, inventory] = await Promise.all([
+        api.getWorkOrders(),
+        api.getClients(),
+        api.getMachines(),
+        api.getInventory()
+      ]);
+
+      if (orders && orders.length > 0) {
+        this.workOrders = orders.map(api.normalizeWorkOrder);
+      }
+      if (clients && clients.length > 0) {
+        this.clients = clients.map(api.normalizeClient);
+      }
+      if (machines && machines.length > 0) {
+        this.machines = machines.map(api.normalizeMachine);
+      }
+      if (inventory && inventory.length > 0) {
+        this.inventory = inventory;
+      }
+
+      // Re-render with live data
+      this.renderCurrentView();
+      this.updateDashboardCounters();
+      if (this.whatsAppManager) this.whatsAppManager.renderClientList();
+
+      // Update live status pill
+      const pill = document.getElementById('shop-live-status-text');
+      const running = this.machines.filter(m => m.status === 'Running').length;
+      if (pill) pill.textContent = `${running} Work Centers Active • Live`;
+
+      console.info(`[CRM] Synced — ${this.workOrders.length} orders, ${this.clients.length} clients, ${this.machines.length} machines, ${this.inventory.length} inventory items`);
     } catch (e) {
-      console.error("Error loading local state, falling back to defaults:", e);
-      this.workOrders = window.VORTEX_INITIAL_DATA.workOrders;
-      this.clients = window.VORTEX_INITIAL_DATA.clients;
-      this.machines = window.VORTEX_INITIAL_DATA.machines;
-      this.materials = window.VORTEX_INITIAL_DATA.materialsDatabase;
-      this.inventory = window.VORTEX_INITIAL_DATA.inventory;
-      this.shopInfo = window.VORTEX_INITIAL_DATA.shopInfo;
+      console.error('[CRM] Backend sync error:', e);
     }
   }
 
-  saveState() {
-    try {
-      localStorage.setItem('vortex_work_orders', JSON.stringify(this.workOrders));
-      localStorage.setItem('vortex_clients', JSON.stringify(this.clients));
-      localStorage.setItem('vortex_machines', JSON.stringify(this.machines));
-    } catch (e) {
-      console.warn("Unable to save to localStorage:", e);
-    }
+  // Legacy compatibility — saves to backend if available, localStorage otherwise
+  async saveState() {
+    // State is persisted per-operation via API calls
+    // This is a no-op kept for compatibility
   }
 
   initSubModules() {
@@ -441,6 +480,7 @@ class VortexApp {
   openOrderDetailSheet(orderId) {
     const order = this.workOrders.find(o => o.id === orderId) || this.workOrders[0];
     if (!order) return;
+    this._activeDetailOrderId = order.id;
 
     const sheet = document.getElementById('odoo-order-detail-sheet');
     const kanban = document.getElementById('wo-kanban-container');
@@ -451,8 +491,47 @@ class VortexApp {
       if (kanban) kanban.style.display = 'none';
       if (table) table.style.display = 'none';
 
-      const titleEl = document.getElementById('order-sheet-part-title');
-      if (titleEl) titleEl.textContent = `${order.id} - ${order.partName}`;
+      // Populate all dynamic fields
+      const client = this.clients.find(c => c.id === order.clientId) || { name: order.clientContact, whatsapp: order.clientPhone };
+      const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      const setHtml = (id, val) => { const el = document.getElementById(id); if (el) el.innerHTML = val; };
+      const setAttr = (id, attr, val) => { const el = document.getElementById(id); if (el) el[attr] = val; };
+
+      setEl('order-sheet-part-title', `${order.id} - ${order.partName}`);
+      setEl('sheet-customer-name', `${order.clientName} (${order.clientContact || client.name})`);
+      setEl('sheet-process', order.process);
+      setEl('sheet-material', order.material);
+      setEl('sheet-dimensions', order.dimensions || '—');
+      setEl('sheet-tolerance', order.tolerance);
+      setEl('sheet-surface', order.surfaceFinish);
+      setEl('sheet-qty-price', `${order.quantity} Units @ $${(order.unitPrice||0).toFixed(2)} / unit ($${(order.totalPrice||0).toFixed(2)} Total)`);
+      setEl('sheet-due-date', order.dueDate ? `${order.dueDate} (${this._daysRemaining(order.dueDate)})` : '—');
+
+      // Update buttons with current order id
+      ['sheet-btn-whatsapp', 'sheet-btn-traveler', 'sheet-btn-tally', 'sheet-btn-advance', 'sheet-btn-edit', 'sheet-btn-delete'].forEach(btnId => {
+        const btn = document.getElementById(btnId);
+        if (btn) btn.setAttribute('data-order-id', order.id);
+      });
+
+      // WhatsApp phone link
+      const waLink = document.getElementById('sheet-wa-phone-link');
+      if (waLink) {
+        waLink.href = 'javascript:void(0)';
+        waLink.onclick = () => this.openWhatsAppQuickModal(order.id);
+        waLink.textContent = ` ${order.clientPhone}`;
+      }
+
+      // Smart buttons
+      const smBtnWA = document.getElementById('sheet-smart-btn-wa');
+      if (smBtnWA) {
+        const msgs = this._activeDetailOrderId ? 4 : 0;
+        smBtnWA.querySelector('.stat-num').textContent = `${msgs} Messages`;
+      }
+      const smBtnTally = document.getElementById('sheet-smart-btn-tally');
+      if (smBtnTally) {
+        const inr = ((order.totalPrice || 0) * 83 * 1.18).toLocaleString('en-IN', {maximumFractionDigits:0});
+        smBtnTally.querySelector('.stat-num').textContent = `₹${inr}`;
+      }
 
       // Update Chevrons
       const stages = ["DFM Review", "G-Code Ready", "Machining", "QC Inspection", "Dispatched", "Delivered"];
@@ -465,7 +544,32 @@ class VortexApp {
       });
 
       sheet.scrollIntoView({ behavior: 'smooth' });
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     }
+  }
+
+  _daysRemaining(dateStr) {
+    if (!dateStr) return '';
+    const diff = Math.ceil((new Date(dateStr) - new Date()) / 86400000);
+    if (diff < 0) return `${Math.abs(diff)} Days Overdue ⚠️`;
+    if (diff === 0) return 'Due Today!';
+    return `${diff} Days Remaining`;
+  }
+
+  inspectPartIn3D(orderId) {
+    const order = this.workOrders.find(o => o.id === orderId);
+    if (!order) return;
+    this.switchView('cad-viewer');
+    if (this.cadViewer) {
+      this.cadViewer.loadPreset(order.modelPreset || 'turbine');
+      const partName = document.getElementById('cad-part-name');
+      const orderRef = document.getElementById('cad-order-ref');
+      const matRef = document.getElementById('cad-material-ref');
+      if (partName) partName.textContent = order.partName;
+      if (orderRef) orderRef.textContent = `Work Order: ${order.id} (${order.clientName})`;
+      if (matRef) matRef.textContent = `Material: ${order.material}`;
+    }
+    this.showToast(`Loaded 3D model for ${order.partName}`, 'info');
   }
 
   closeOrderDetailSheet() {
@@ -543,6 +647,11 @@ class VortexApp {
     this.renderWorkOrders();
     this.playSound('success');
     this.showToast(`Advanced ${order.id} to ${next.to}!`, 'success');
+
+    // Persist to backend if live
+    if (this.backendAvailable && window.VortexAPI) {
+      window.VortexAPI.updateWorkOrderStatus(order.id, order.status, order.progress).catch(e => console.warn(e));
+    }
 
     // Prompt user to send WhatsApp notification
     setTimeout(() => {
@@ -700,6 +809,20 @@ class VortexApp {
       });
     }
 
+    // Order detail sheet action buttons (delegated)
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-order-id]');
+      if (!btn) return;
+      const oid = btn.getAttribute('data-order-id');
+      if (!oid) return;
+      if (btn.id === 'sheet-btn-whatsapp') { e.preventDefault(); this.openWhatsAppQuickModal(oid); }
+      if (btn.id === 'sheet-btn-traveler') { e.preventDefault(); this.openJobTravelerModal(oid); }
+      if (btn.id === 'sheet-btn-tally') { e.preventDefault(); if (this.ownerBriefing) this.ownerBriefing.exportTallyXml(oid); }
+      if (btn.id === 'sheet-btn-advance') { e.preventDefault(); this.advanceOrderStage(oid); }
+      if (btn.id === 'sheet-btn-edit') { e.preventDefault(); this.openEditWorkOrderModal(oid); }
+      if (btn.id === 'sheet-btn-delete') { e.preventDefault(); this.deleteWorkOrder(oid); }
+    });
+
     // Modal Live Price Auto-calculator
     const qtyInput = document.getElementById('wo-form-quantity');
     const unitPriceInput = document.getElementById('wo-form-unit-price');
@@ -797,19 +920,35 @@ class VortexApp {
     document.getElementById('wo-form-tolerance').value = order.tolerance;
     document.getElementById('wo-form-finish').value = order.surfaceFinish;
     document.getElementById('wo-form-quantity').value = order.quantity;
-    document.getElementById('wo-form-unit-price').value = order.unitPrice.toFixed(2);
-    document.getElementById('wo-form-total-price').value = order.totalPrice.toFixed(2);
+    document.getElementById('wo-form-unit-price').value = (order.unitPrice || 0).toFixed(2);
+    document.getElementById('wo-form-total-price').value = (order.totalPrice || 0).toFixed(2);
     document.getElementById('wo-form-status').value = order.status;
     document.getElementById('wo-form-priority').value = order.priority;
-    document.getElementById('wo-form-progress').value = order.progress;
-    document.getElementById('wo-form-due-date').value = order.dueDate;
+    const progressEl = document.getElementById('wo-form-progress');
+    if (progressEl) progressEl.value = order.progress || 0;
+    const dueDateEl = document.getElementById('wo-form-due-date');
+    if (dueDateEl) dueDateEl.value = order.dueDate || '';
     document.getElementById('wo-form-notes').value = order.notes || "";
 
     const machineSelect = document.getElementById('wo-form-machine-id');
     if (machineSelect && order.machineName) machineSelect.value = order.machineName;
   }
 
-  saveWorkOrderFromForm() {
+  async deleteWorkOrder(orderId) {
+    if (!confirm(`Delete work order ${orderId}? This cannot be undone.`)) return;
+
+    const idx = this.workOrders.findIndex(o => o.id === orderId);
+    if (idx !== -1) this.workOrders.splice(idx, 1);
+    this.renderWorkOrders();
+    this.showToast(`Work Order ${orderId} deleted.`, 'warning');
+
+    const api = window.VortexAPI;
+    if (this.backendAvailable && api) {
+      await api.deleteWorkOrder(orderId).catch(e => console.warn('[CRM] Delete failed:', e));
+    }
+  }
+
+  async saveWorkOrderFromForm() {
     const idField = document.getElementById('wo-form-id').value;
     const isEdit = !!idField;
     const orderId = isEdit ? idField : document.getElementById('wo-form-order-number').textContent;
@@ -825,7 +964,17 @@ class VortexApp {
     const quantity = parseInt(document.getElementById('wo-form-quantity').value, 10) || 1;
     const unitPrice = parseFloat(document.getElementById('wo-form-unit-price').value) || 0;
     const totalPrice = parseFloat(document.getElementById('wo-form-total-price').value) || (quantity * unitPrice);
-    const progress = parseInt(document.getElementById('wo-form-progress').value, 10) || 0;
+    const progressEl = document.getElementById('wo-form-progress');
+    const progress = progressEl ? parseInt(progressEl.value, 10) || 0 : 0;
+    const dueDateEl = document.getElementById('wo-form-due-date');
+    const dueDate = dueDateEl ? dueDateEl.value : '';
+
+    function getPreset(proc) {
+      if (proc.includes('5-Axis')) return 'turbine';
+      if (proc.includes('Turn')) return 'gear';
+      if (proc.includes('3D') || proc.includes('Additive')) return 'bracket';
+      return 'manifold';
+    }
 
     const orderData = {
       id: orderId,
@@ -848,10 +997,10 @@ class VortexApp {
       priority: document.getElementById('wo-form-priority').value,
       machineName: document.getElementById('wo-form-machine-id').value,
       operator: "Vikram Sharma",
-      dueDate: document.getElementById('wo-form-due-date').value || "2026-10-20",
+      dueDate: dueDate || new Date(Date.now() + 14*86400000).toISOString().split('T')[0],
       createdDate: new Date().toISOString().split('T')[0],
       cadFile: `${orderId.toLowerCase()}_cad_model.step`,
-      modelPreset: orderDataPreset(document.getElementById('wo-form-process').value),
+      modelPreset: getPreset(document.getElementById('wo-form-process').value),
       progress: progress,
       cycleTimeMinutes: 35,
       camSoftware: "Mastercam / NX CAM",
@@ -859,33 +1008,54 @@ class VortexApp {
       notes: document.getElementById('wo-form-notes').value
     };
 
-    function orderDataPreset(proc) {
-      if (proc.includes('5-Axis')) return 'turbine';
-      if (proc.includes('Turn')) return 'gear';
-      if (proc.includes('3D') || proc.includes('Additive')) return 'bracket';
-      return 'manifold';
-    }
-
+    // Update local state immediately (optimistic UI)
     if (isEdit) {
       const idx = this.workOrders.findIndex(o => o.id === orderId);
-      if (idx !== -1) {
-        this.workOrders[idx] = { ...this.workOrders[idx], ...orderData };
-      }
-      this.showToast(`Work Order ${orderId} updated!`, 'success');
+      if (idx !== -1) this.workOrders[idx] = { ...this.workOrders[idx], ...orderData };
     } else {
       this.workOrders.unshift(orderData);
-      this.showToast(`New Work Order ${orderId} created!`, 'success');
     }
 
-    this.saveState();
     this.closeWorkOrderModal();
     this.renderWorkOrders();
     this.playSound('success');
+
+    // Persist to backend
+    const api = window.VortexAPI;
+    if (this.backendAvailable && api) {
+      try {
+        let result;
+        if (isEdit) {
+          result = await api.updateWorkOrder(orderId, orderData);
+        } else {
+          result = await api.createWorkOrder(orderData);
+        }
+        if (result) {
+          this.showToast(`Work Order ${orderId} ${isEdit ? 'updated' : 'created'}!`, 'success');
+          // Refresh from server to get canonical ID if server assigned one
+          if (!isEdit && result.id && result.id !== orderId) {
+            orderData.id = result.id;
+            this.workOrders[0].id = result.id;
+            this.renderWorkOrders();
+          }
+        } else {
+          this.showToast(`${isEdit ? 'Updated' : 'Created'} locally (server sync pending)`, 'warning');
+        }
+      } catch (e) {
+        this.showToast(`Saved locally — server sync failed`, 'warning');
+      }
+    } else {
+      this.showToast(`Work Order ${orderId} ${isEdit ? 'updated' : 'created'} (demo mode)!`, 'success');
+    }
   }
 
   closeWorkOrderModal() {
     const modal = document.getElementById('work-order-modal');
     if (modal) modal.classList.remove('open');
+  }
+
+  openJobTravelerModal(orderId) {
+    return this.printJobTraveler(orderId);
   }
 
   printJobTraveler(orderId) {
@@ -1065,35 +1235,107 @@ class VortexApp {
   setupClientHandlers() {
     const addClientBtn = document.getElementById('btn-add-client');
     if (addClientBtn) {
-      addClientBtn.addEventListener('click', () => {
-        const company = prompt("Enter Client Company Name:");
-        if (!company) return;
-        const name = prompt("Enter Contact Person Name:");
-        const whatsapp = prompt("Enter WhatsApp Number (with country code, e.g. +15551234567):");
-        const industry = prompt("Enter Industry (e.g. Aerospace, Robotics, Medical):") || "General Engineering";
+      addClientBtn.addEventListener('click', () => this.openAddClientModal());
+    }
 
-        const newClient = {
-          id: `C-${100 + this.clients.length + 1}`,
-          name: name || company,
-          company: company,
-          email: `${company.toLowerCase().replace(/[^a-z]/g, '')}@example.com`,
-          phone: whatsapp || "+1 555-000-0000",
-          whatsapp: whatsapp || "+15550000000",
-          industry: industry,
-          taxId: "TAX-NEW",
-          totalOrders: 0,
-          totalSpent: 0,
-          outstanding: 0,
-          rating: 5,
-          notes: "New client registered via CRM."
-        };
+    // Add Client Modal handlers
+    const clientModalClose = document.getElementById('client-modal-close');
+    const clientForm = document.getElementById('client-form');
+    const clientModalBackdrop = document.getElementById('add-client-modal');
 
-        this.clients.unshift(newClient);
-        this.saveState();
-        this.renderClientsDirectory();
-        this.whatsAppManager.renderClientList();
-        this.showToast(`Client ${company} created!`, 'success');
+    if (clientModalClose) clientModalClose.addEventListener('click', () => this.closeAddClientModal());
+    if (clientModalBackdrop) {
+      clientModalBackdrop.addEventListener('click', (e) => {
+        if (e.target === clientModalBackdrop) this.closeAddClientModal();
       });
+    }
+    if (clientForm) {
+      clientForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.saveClientFromForm();
+      });
+    }
+  }
+
+  openAddClientModal(prefill = null) {
+    const modal = document.getElementById('add-client-modal');
+    const form = document.getElementById('client-form');
+    if (!modal || !form) return;
+    form.reset();
+    document.getElementById('client-form-id').value = '';
+    const title = document.getElementById('client-modal-title');
+    if (title) title.textContent = prefill ? `Edit Client: ${prefill.company}` : 'Add New Customer';
+    if (prefill) {
+      document.getElementById('client-form-id').value = prefill.id || '';
+      document.getElementById('client-form-company').value = prefill.company || '';
+      document.getElementById('client-form-name').value = prefill.name || '';
+      document.getElementById('client-form-email').value = prefill.email || '';
+      document.getElementById('client-form-phone').value = prefill.phone || '';
+      document.getElementById('client-form-whatsapp').value = prefill.whatsapp || '';
+      document.getElementById('client-form-industry').value = prefill.industry || 'General Engineering';
+      document.getElementById('client-form-taxid').value = prefill.taxId || '';
+      document.getElementById('client-form-notes').value = prefill.notes || '';
+    }
+    modal.classList.add('open');
+  }
+
+  closeAddClientModal() {
+    const modal = document.getElementById('add-client-modal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  async saveClientFromForm() {
+    const existingId = document.getElementById('client-form-id').value;
+    const isEdit = !!existingId;
+
+    const company = document.getElementById('client-form-company').value.trim();
+    const name = document.getElementById('client-form-name').value.trim();
+    const email = document.getElementById('client-form-email').value.trim();
+    const phone = document.getElementById('client-form-phone').value.trim();
+    const whatsapp = document.getElementById('client-form-whatsapp').value.trim();
+    const industry = document.getElementById('client-form-industry').value.trim();
+    const taxId = document.getElementById('client-form-taxid').value.trim();
+    const notes = document.getElementById('client-form-notes').value.trim();
+
+    if (!company || !whatsapp) {
+      this.showToast('Company name and WhatsApp number are required!', 'warning');
+      return;
+    }
+
+    const clientId = existingId || `C-${100 + this.clients.length + 1}`;
+    const newClient = {
+      id: clientId, name: name || company, company, email,
+      phone: phone || whatsapp, whatsapp, industry: industry || 'General Engineering',
+      taxId, totalOrders: 0, totalSpent: 0, outstanding: 0, rating: 5, notes
+    };
+
+    // Optimistic local update
+    if (isEdit) {
+      const idx = this.clients.findIndex(c => c.id === existingId);
+      if (idx !== -1) this.clients[idx] = { ...this.clients[idx], ...newClient };
+    } else {
+      this.clients.unshift(newClient);
+    }
+
+    this.closeAddClientModal();
+    this.renderClientsDirectory();
+    if (this.whatsAppManager) this.whatsAppManager.renderClientList();
+    this.showToast(`Client ${company} ${isEdit ? 'updated' : 'created'}!`, 'success');
+    this.playSound('success');
+
+    // Persist to backend
+    const api = window.VortexAPI;
+    if (this.backendAvailable && api) {
+      try {
+        if (isEdit) {
+          await api.updateClient(existingId, newClient);
+        } else {
+          const result = await api.createClient(newClient);
+          if (result && result.id) this.clients[0].id = result.id;
+        }
+      } catch (e) {
+        console.warn('[CRM] Client save failed on backend:', e);
+      }
     }
   }
 
@@ -1106,35 +1348,148 @@ class VortexApp {
 
     tbody.innerHTML = '';
     this.inventory.forEach(item => {
-      const isLow = item.stock <= item.minThreshold;
+      const minTh = item.minThreshold !== undefined ? item.minThreshold : item.min_threshold;
+      const isLow = item.stock <= minTh;
       const row = document.createElement('tr');
       row.innerHTML = `
         <td class="font-mono text-muted">${item.id}</td>
         <td><strong>${item.name}</strong></td>
         <td><span class="badge-category">${item.category}</span></td>
         <td class="font-bold ${isLow ? 'text-warning' : ''}">${item.stock} ${item.unit}</td>
-        <td>${item.minThreshold} ${item.unit}</td>
+        <td>${minTh} ${item.unit}</td>
         <td>
           <span class="badge-stock ${isLow ? 'badge-low' : 'badge-ok'}">
             ${isLow ? '⚠️ Low Stock Alert' : '🟢 Healthy'}
           </span>
         </td>
         <td>
-          <button class="btn-sm btn-outline" onclick="window.vortexApp.restockItem('${item.id}')">Restock</button>
+          <div style="display: flex; gap: 4px;">
+            <button class="btn-sm btn-odoo-primary" onclick="window.vortexApp.openRestockModal('${item.id}')">
+              <i data-lucide="package-plus"></i> Restock
+            </button>
+            <button class="btn-sm btn-outline" style="color: var(--status-error-text);" onclick="window.vortexApp.deleteInventoryItem('${item.id}')" title="Delete SKU">
+              <i data-lucide="trash-2"></i>
+            </button>
+          </div>
         </td>
       `;
       tbody.appendChild(row);
     });
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
-  restockItem(itemId) {
+  openAddInventoryModal() {
+    const modal = document.getElementById('add-inventory-modal');
+    const form = document.getElementById('inventory-form');
+    if (form) form.reset();
+    if (modal) modal.classList.add('open');
+  }
+
+  closeAddInventoryModal() {
+    const modal = document.getElementById('add-inventory-modal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  async saveInventoryFromForm(e) {
+    if (e) e.preventDefault();
+    const name = document.getElementById('inv-form-name').value.trim();
+    const category = document.getElementById('inv-form-category').value;
+    const unit = document.getElementById('inv-form-unit').value.trim() || 'Pcs';
+    const stock = parseFloat(document.getElementById('inv-form-stock').value) || 0;
+    const minThreshold = parseFloat(document.getElementById('inv-form-min-threshold').value) || 3;
+
+    if (!name) {
+      this.showToast('Item name is required!', 'warning');
+      return;
+    }
+
+    const newId = `INV-${(this.inventory.length + 1).toString().padStart(2, '0')}`;
+    const newItem = {
+      id: newId,
+      name,
+      category,
+      unit,
+      stock,
+      minThreshold,
+      status: stock <= minThreshold ? 'Low Stock' : 'In Stock'
+    };
+
+    this.inventory.push(newItem);
+    this.closeAddInventoryModal();
+    this.renderInventoryView();
+    this.playSound('success');
+    this.showToast(`Added ${name} to stock!`, 'success');
+
+    if (this.backendAvailable && window.VortexAPI) {
+      try {
+        const res = await window.VortexAPI.createInventoryItem(newItem);
+        if (res && res.id) newItem.id = res.id;
+      } catch (err) {
+        console.warn('[CRM] Save inventory error:', err);
+      }
+    }
+  }
+
+  openRestockModal(itemId) {
     const item = this.inventory.find(i => i.id === itemId);
     if (!item) return;
-    const addQty = parseInt(prompt(`Add stock quantity for ${item.name}:`, "10"), 10);
-    if (addQty && !isNaN(addQty)) {
-      item.stock += addQty;
-      this.renderInventoryView();
-      this.showToast(`Added ${addQty} ${item.unit} to ${item.name}`, 'success');
+    const modal = document.getElementById('restock-item-modal');
+    if (!modal) return;
+
+    document.getElementById('restock-item-id').value = item.id;
+    document.getElementById('restock-item-name').textContent = `${item.id}: ${item.name}`;
+    document.getElementById('restock-current-stock').textContent = item.stock;
+    document.getElementById('restock-unit-label').textContent = item.unit;
+    document.getElementById('restock-add-qty').value = 10;
+    const notes = document.getElementById('restock-notes');
+    if (notes) notes.value = '';
+
+    modal.classList.add('open');
+  }
+
+  closeRestockModal() {
+    const modal = document.getElementById('restock-item-modal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  async submitRestock(e) {
+    if (e) e.preventDefault();
+    const itemId = document.getElementById('restock-item-id').value;
+    const qty = parseFloat(document.getElementById('restock-add-qty').value) || 0;
+    if (qty <= 0) {
+      this.showToast('Please enter a valid quantity to restock.', 'warning');
+      return;
+    }
+
+    const item = this.inventory.find(i => i.id === itemId);
+    if (!item) return;
+
+    item.stock += qty;
+    const minTh = item.minThreshold !== undefined ? item.minThreshold : item.min_threshold;
+    item.status = item.stock <= minTh ? 'Low Stock' : 'In Stock';
+
+    this.closeRestockModal();
+    this.renderInventoryView();
+    this.playSound('success');
+    this.showToast(`Received ${qty} ${item.unit} for ${item.name}!`, 'success');
+
+    if (this.backendAvailable && window.VortexAPI) {
+      await window.VortexAPI.restockInventoryItem(itemId, qty).catch(err => console.warn(err));
+    }
+  }
+
+  async deleteInventoryItem(itemId) {
+    const item = this.inventory.find(i => i.id === itemId);
+    if (!item) return;
+    if (!confirm(`Delete ${item.name} from inventory?`)) return;
+
+    this.inventory = this.inventory.filter(i => i.id !== itemId);
+    this.renderInventoryView();
+    this.showToast(`Removed ${item.name} from stock.`, 'info');
+
+    if (this.backendAvailable && window.VortexAPI) {
+      await window.VortexAPI.deleteInventoryItem(itemId).catch(err => console.warn(err));
     }
   }
 
@@ -1144,8 +1499,10 @@ class VortexApp {
   renderAnalyticsView() {
     // Computes live metrics
     const totalRev = this.workOrders.reduce((sum, o) => sum + (o.totalPrice || 0), 0);
-    const cncRev = this.workOrders.filter(o => o.process.includes('CNC')).reduce((sum, o) => sum + o.totalPrice, 0);
-    const threeDRev = this.workOrders.filter(o => o.process.includes('3D')).reduce((sum, o) => sum + o.totalPrice, 0);
+    const cncOrders = this.workOrders.filter(o => o.process && o.process.includes('CNC'));
+    const threeDOrders = this.workOrders.filter(o => o.process && o.process.includes('3D'));
+    const cncRev = cncOrders.reduce((sum, o) => sum + (o.totalPrice || 0), 0);
+    const threeDRev = threeDOrders.reduce((sum, o) => sum + (o.totalPrice || 0), 0);
 
     const cncPct = totalRev > 0 ? Math.round((cncRev / totalRev) * 100) : 60;
     const threeDPct = totalRev > 0 ? Math.round((threeDRev / totalRev) * 100) : 40;
@@ -1159,6 +1516,21 @@ class VortexApp {
     if (threeDBar) threeDBar.style.width = `${threeDPct}%`;
     if (cncLabel) cncLabel.textContent = `CNC Machining: $${cncRev.toLocaleString()} (${cncPct}%)`;
     if (threeDLabel) threeDLabel.textContent = `3D Additive: $${threeDRev.toLocaleString()} (${threeDPct}%)`;
+
+    // Update summary stats in analytics view
+    const totalRevEl = document.getElementById('analytics-total-rev');
+    const balanceEl = document.getElementById('analytics-balance-due');
+    const deliveredEl = document.getElementById('analytics-delivered');
+    const activeEl = document.getElementById('analytics-active-count');
+
+    const balanceDue = this.workOrders.reduce((sum, o) => sum + (o.balanceDue || 0), 0);
+    const deliveredOrders = this.workOrders.filter(o => o.status === 'Delivered').length;
+    const activeOrders = this.workOrders.filter(o => o.status !== 'Delivered').length;
+
+    if (totalRevEl) totalRevEl.textContent = `$${totalRev.toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0})}`;
+    if (balanceEl) balanceEl.textContent = `$${balanceDue.toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0})}`;
+    if (deliveredEl) deliveredEl.textContent = deliveredOrders;
+    if (activeEl) activeEl.textContent = activeOrders;
   }
 
   /* -------------------------------------------------------------

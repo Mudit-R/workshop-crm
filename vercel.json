@@ -2,10 +2,6 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/docs",
-      "destination": "/api/index.py"
-    },
-    {
       "source": "/api/(.*)",
       "destination": "/api/index.py"
     }

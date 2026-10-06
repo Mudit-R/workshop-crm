@@ -191,6 +191,11 @@ class VortexWhatsAppManager {
 
     // Notify user toast
     this.app.showToast(`WhatsApp message dispatched to ${this.activePhone}`, 'success');
+
+    // Persist to backend if live
+    if (this.app.backendAvailable && window.VortexAPI) {
+      window.VortexAPI.sendMessage(this.activePhone, text, senderType).catch(e => console.warn(e));
+    }
   }
 
   simulateClientMessage(inboundText = null) {

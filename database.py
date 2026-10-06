@@ -123,6 +123,19 @@ def init_db():
     )
     """)
 
+    # Inventory & Tooling Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS inventory (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        stock REAL NOT NULL,
+        unit TEXT NOT NULL,
+        min_threshold REAL NOT NULL,
+        status TEXT NOT NULL
+    )
+    """)
+
     # Seed data if empty
     cursor.execute("SELECT COUNT(*) FROM work_orders")
     count = cursor.fetchone()[0]
@@ -130,8 +143,30 @@ def init_db():
     if count == 0:
         seed_initial_data(cursor)
 
+    cursor.execute("SELECT COUNT(*) FROM inventory")
+    inv_count = cursor.fetchone()[0]
+    if inv_count == 0:
+        seed_inventory_data(cursor)
+
     conn.commit()
     conn.close()
+
+def seed_inventory_data(cursor):
+    inventory_data = [
+        ("INV-01", "Aluminum 6061-T6 Round Billet (150mm dia x 1000mm)", "Raw Stock", 18.0, "Bars", 5.0, "In Stock"),
+        ("INV-02", "Aluminum 7075-T6 Aerospace Plate (65mm thick)", "Raw Stock", 4.0, "Plates", 3.0, "Low Stock"),
+        ("INV-03", "Stainless Steel 316L Round Bar (80mm dia)", "Raw Stock", 12.0, "Bars", 4.0, "In Stock"),
+        ("INV-04", "Delrin POM-C Black Rod (120mm dia)", "Plastics", 9.0, "Rods", 3.0, "In Stock"),
+        ("INV-05", "EOS PA 2200 SLS Powder (Polyamide 12)", "3D Powder", 65.0, "kg", 20.0, "In Stock"),
+        ("INV-06", "EOS Titanium Ti-6Al-4V Grade 23 Powder", "Metal Powder", 28.0, "kg", 15.0, "In Stock"),
+        ("INV-07", "Carbide Endmill 10mm 4-Flute AlTiN Coated", "Tooling", 24.0, "Pcs", 10.0, "In Stock"),
+        ("INV-08", "Blaser Swisslube High-Performance Coolant", "Consumables", 180.0, "Liters", 50.0, "In Stock")
+    ]
+    cursor.executemany("""
+    INSERT INTO inventory (id, name, category, stock, unit, min_threshold, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, inventory_data)
+    print("Vortex CRM inventory seeded with initial records.")
 
 def seed_initial_data(cursor):
     # Load initial data from static/js/data.js or seed directly
